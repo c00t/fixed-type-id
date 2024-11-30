@@ -2,7 +2,7 @@
 #![allow(incomplete_features)]
 #![feature(str_from_raw_parts)]
 #![feature(generic_const_exprs)]
-#![doc = include_str!("../../README.md")]
+#![doc = include_str!("../README.md")]
 
 use core::fmt;
 
