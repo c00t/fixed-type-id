@@ -19,7 +19,7 @@ name = "fixed-type-id"
 version = "0.1.0"
 dependencies = [
  "fixed-type-id-macros",
- "fixedstr",
+ "fixedstr-ext",
  "rapidhash",
  "semver",
 ]
@@ -37,9 +37,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "fixedstr"
+name = "fixedstr-ext"
 version = "0.5.8"
-source = "git+https://github.com/c00t/fixedstr?rev=623fb4d4420a5c60277b9a657d17aa4c8e3983cd#623fb4d4420a5c60277b9a657d17aa4c8e3983cd"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4ddfe511d23a88cf43e1aaace87a038bdf4d9a8790a715080c40adfcb59aaef"
 
 [[package]]
 name = "getrandom"

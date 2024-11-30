@@ -12,7 +12,7 @@ keywords = ["typeid", "type-id", "reflection"]
 
 [dependencies]
 fixed-type-id-macros = { path = "../fixed_type_id_macros", version = "0.1.0" }
-fixedstr = { git = "https://github.com/c00t/fixedstr", rev = "623fb4d4420a5c60277b9a657d17aa4c8e3983cd", features = ["fstr"] }
+fixedstr-ext = { version = "0.5.8", features = ["fstr"] }
 rapidhash = "1.1.0"
 semver = "1.0.23"
 

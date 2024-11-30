@@ -250,7 +250,7 @@ pub trait ConstTypeName {
     /// It's the only const you should defined for your struct.
     const RAW_SLICE: &[&str];
     /// A fixed string for the type name, used to avoid heap when need to format the type name.
-    const TYPE_NAME_FSTR: fixedstr::fstr<CONST_TYPENAME_LEN> = slice_to_fstr(Self::RAW_SLICE);
+    const TYPE_NAME_FSTR: fixedstr_ext::fstr<CONST_TYPENAME_LEN> = slice_to_fstr(Self::RAW_SLICE);
 }
 
 /// A helper function to get the type name of a type.
@@ -351,14 +351,14 @@ macro_rules! implement_wrapper_fixed_type_id {
   };
 }
 
-/// Helper function to convert a fixed string [`fixedstr::fstr`] to a string.
-pub const fn fstr_to_str<const N: usize>(fstr: &'static fixedstr::fstr<N>) -> &'static str {
+/// Helper function to convert a fixed string [`fixedstr_ext::fstr`] to a string.
+pub const fn fstr_to_str<const N: usize>(fstr: &'static fixedstr_ext::fstr<N>) -> &'static str {
     unsafe { core::str::from_raw_parts(fstr.to_ptr(), fstr.len()) }
 }
 
-/// Helper function to convert a slice of string to a fixed string [`fixedstr::fstr`].
-pub const fn slice_to_fstr<const N: usize>(slice: &[&str]) -> fixedstr::fstr<N> {
-    fixedstr::fstr::<N>::const_create_from_str_slices(slice)
+/// Helper function to convert a slice of string to a fixed string [`fixedstr_ext::fstr`].
+pub const fn slice_to_fstr<const N: usize>(slice: &[&str]) -> fixedstr_ext::fstr<N> {
+    fixedstr_ext::fstr::<N>::const_create_from_str_slice(slice)
 }
 
 use std::collections::{BTreeMap, HashMap};
