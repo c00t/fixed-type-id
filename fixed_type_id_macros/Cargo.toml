@@ -1,0 +1,28 @@
+[package]
+name = "fixed-type-id-macros"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["cupofc0t <cupofc0t@gmail.com>"]
+description = "Make your types have a fixed type id&stable type name with version support between different builds."
+homepage = "https://github.com/c00t/fixed-type-id"
+repository = "https://github.com/c00t/fixed-type-id"
+categories = []
+keywords = ["typeid", "type-id", "reflection"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { version = "1.0", features = ["nightly"] }
+quote = "1.0.21"
+syn = {version = "2", features = ["full"]}
+rand = "0.8.5"
+rapidhash = "1.1.0"
+
+[dev-dependencies]
+fixed-type-id = { path = "../fixed_type_id" }
+
+[features]
+erase_name = []
+

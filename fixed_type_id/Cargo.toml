@@ -1,0 +1,24 @@
+[package]
+name = "fixed-type-id"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["cupofc0t <cupofc0t@gmail.com>"]
+description = "Make your types have a fixed type id&stable type name with version support between different builds."
+homepage = "https://github.com/c00t/fixed-type-id"
+repository = "https://github.com/c00t/fixed-type-id"
+categories = []
+keywords = ["typeid", "type-id", "reflection"]
+
+[dependencies]
+fixed-type-id-macros = { path = "../fixed_type_id_macros", version = "0.1.0" }
+fixedstr = { git = "https://github.com/c00t/fixedstr", rev = "623fb4d4420a5c60277b9a657d17aa4c8e3983cd", features = ["fstr"] }
+rapidhash = "1.1.0"
+semver = "1.0.23"
+
+[features]
+default = ["len128"]
+len64 = []
+len128 = []
+len256 = []
+erase_name = []

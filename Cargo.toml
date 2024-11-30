@@ -1,0 +1,3 @@
+[workspace]
+resolver = "2"
+members = ["fixed_type_id" , "fixed_type_id_macros"]
