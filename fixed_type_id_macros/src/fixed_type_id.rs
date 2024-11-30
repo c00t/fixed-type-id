@@ -2,19 +2,13 @@ use core::panic;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::quote;
-use quote::ToTokens;
 use rand::prelude::*;
 use rapidhash::rapidhash;
-use rapidhash::RapidInlineHasher;
-use std::hash::Hasher;
-use std::{fs::File, mem::discriminant};
+use std::fs::File;
 use syn::{
     parenthesized,
     parse::{Parse, ParseStream},
-    parse_macro_input,
-    punctuated::Punctuated,
-    Attribute, Expr, ExprReference, GenericArgument, Lit, Meta, MetaNameValue, PathArguments,
-    Result, Token,
+    parse_macro_input, Attribute, Expr, GenericArgument, Lit, PathArguments, Result, Token,
 };
 
 /// Copy from [`rapidhash`]
@@ -120,7 +114,7 @@ fn extract_generics(path: &syn::Path) -> Vec<GenericArgument> {
             }
             _ => None,
         })
-        .unwrap_or(Vec::new())
+        .unwrap_or_default()
 }
 
 /// Custom structure to represent `dyn TraitName` and multiple attributes
@@ -130,7 +124,7 @@ struct GeneralTypesInput {
     type_id_equal_to: Option<String>,
     types: Vec<Type>,
     /// current generics is always empty, because that is parsed to [`Self::paths`]
-    generics: Vec<Vec<GenericArgument>>,
+    _generics: Vec<Vec<GenericArgument>>,
     is_dyn: Vec<bool>,
     /// ref type at outer level
     ref_type: Vec<RefType>,
@@ -233,7 +227,7 @@ impl Parse for GeneralTypesInput {
             version,
             type_id_equal_to,
             types,
-            generics,
+            _generics: generics,
             is_dyn,
             ref_type,
         })
@@ -299,37 +293,6 @@ fn path_to_prefix_path(path: &syn::Path) -> (syn::Path, syn::Path) {
     (prefix, name)
 }
 
-fn path_to_string(ref_type: RefType, is_dyn: bool, path: &syn::Path) -> String {
-    let ref_str = match ref_type {
-        RefType::None => "",
-        RefType::Shared => "&",
-        RefType::Mutable => "&mut",
-    };
-    let is_dyn_str = if is_dyn { "dyn" } else { "" };
-    let path_str = format! {"{}", quote!(#path)}.replace(" ", "");
-    format!("{} {} {}", ref_str, is_dyn_str, path_str)
-        .trim()
-        .to_string()
-}
-
-fn path_to_token_stream(
-    ref_type: RefType,
-    is_dyn: bool,
-    path: &syn::Path,
-) -> proc_macro2::TokenStream {
-    let ref_type = match ref_type {
-        RefType::None => quote! {},
-        RefType::Shared => quote! { & },
-        RefType::Mutable => quote! { &mut },
-    };
-    let is_dyn = if is_dyn {
-        quote! { dyn }
-    } else {
-        quote! {}
-    };
-    quote! { #ref_type #is_dyn #path }
-}
-
 fn type_to_token_stream(ref_type: RefType, is_dyn: bool, ty: &Type) -> proc_macro2::TokenStream {
     let ref_type = match ref_type {
         RefType::None => quote! {},
@@ -370,19 +333,19 @@ pub fn fixed_type_id_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
     for (index, path) in ast.types.iter().enumerate() {
         let mut path_str = type_to_string(ast.ref_type[index], ast.is_dyn[index], path);
-        let type_token_stream = type_to_token_stream(ast.ref_type[index], ast.is_dyn[index], &path);
+        let type_token_stream = type_to_token_stream(ast.ref_type[index], ast.is_dyn[index], path);
         // Hash the name and version to a u64
         names.push(path_str.clone());
         // path string hash
-        let path_hash = rapidhash(&path_str.as_bytes());
+        let path_hash = rapidhash(path_str.as_bytes());
         // version hash
         let version_hash = version_to_hash(&ast.version);
         let mut hash = rapid_mix(path_hash, version_hash);
         if cfg!(feature = "erase_name") {
-            let path_str_hash = rapidhash(&path_str.as_bytes());
+            let path_str_hash = rapidhash(path_str.as_bytes());
             path_str = format!("0x{:x}", path_str_hash);
         }
-        if let Some(_) = ast.type_id_equal_to {
+        if ast.type_id_equal_to.is_some() {
             // store 0u64
             hash = 0;
         }
@@ -451,10 +414,9 @@ pub fn fixed_type_id_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     }
     // let id = gen_id(&types_file_name, &ast.trait_name.to_string(), gen_start);
 
-    let result = TokenStream::from(quote! {
+    TokenStream::from(quote! {
         #(#implementations)*
-    });
-    result
+    })
 }
 
 pub fn fixed_type_id_impl_without_version_hash_in_type(
@@ -472,15 +434,15 @@ pub fn fixed_type_id_impl_without_version_hash_in_type(
 
     for (index, path) in ast.types.iter().enumerate() {
         let mut path_str = type_to_string(ast.ref_type[index], ast.is_dyn[index], path);
-        let type_token_stream = type_to_token_stream(ast.ref_type[index], ast.is_dyn[index], &path);
+        let type_token_stream = type_to_token_stream(ast.ref_type[index], ast.is_dyn[index], path);
         // Hash the name and version to a u64
         names.push(path_str.clone());
-        let path_str_hash = rapidhash(&path_str.as_bytes());
+        let path_str_hash = rapidhash(path_str.as_bytes());
         let mut hash = path_str_hash;
         if cfg!(feature = "erase_name") {
             path_str = format!("0x{:x}", path_str_hash);
         }
-        if let Some(_) = ast.type_id_equal_to {
+        if ast.type_id_equal_to.is_some() {
             // store 0u64
             hash = 0;
         }
@@ -549,11 +511,9 @@ pub fn fixed_type_id_impl_without_version_hash_in_type(
     }
     // let id = gen_id(&types_file_name, &ast.trait_name.to_string(), gen_start);
 
-    let result = TokenStream::from(quote! {
+    TokenStream::from(quote! {
         #(#implementations)*
-    });
-
-    result
+    })
 }
 
 pub fn random_fixed_type_id_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -569,12 +529,12 @@ pub fn random_fixed_type_id_impl(input: proc_macro::TokenStream) -> proc_macro::
 
     for (index, path) in ast.types.iter().enumerate() {
         let mut path_str = type_to_string(ast.ref_type[index], ast.is_dyn[index], path);
-        let type_token_stream = type_to_token_stream(ast.ref_type[index], ast.is_dyn[index], &path);
+        let type_token_stream = type_to_token_stream(ast.ref_type[index], ast.is_dyn[index], path);
         // Hash the name and version to a u64
         names.push(path_str.clone());
 
         if cfg!(feature = "erase_name") {
-            let path_str_hash = rapidhash(&path_str.as_bytes());
+            let path_str_hash = rapidhash(path_str.as_bytes());
             path_str = format!("0x{:x}", path_str_hash);
         }
         let hash: u64 = random();
@@ -616,9 +576,7 @@ pub fn random_fixed_type_id_impl(input: proc_macro::TokenStream) -> proc_macro::
     }
     // let id = gen_id(&types_file_name, &ast.trait_name.to_string(), gen_start);
 
-    let result = TokenStream::from(quote! {
+    TokenStream::from(quote! {
         #(#implementations)*
-    });
-
-    result
+    })
 }

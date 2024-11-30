@@ -1,89 +1,8 @@
+#![deny(missing_docs)]
+#![allow(incomplete_features)]
 #![feature(str_from_raw_parts)]
 #![feature(generic_const_exprs)]
-
-//! A unique id generator for rust types.
-//!
-//! The crate provides a trait and a procedural macro. By implementing [`FixedTypeId`],
-//! other crates can use [`FixedTypeId::ty_id()`], [`FixedTypeId::ty_name()`] and [`FixedTypeId::ty_version()`]
-//! to get the type id, name and version about this type
-//!
-//! ## Notes
-//!
-//! ### Version
-//!
-//! For standard types, the version is always `(0,0,0)`, in the future, it may be changed to rustc version you are using.
-//!
-//! ### Differences between `fixed_type_id`, `fixed_type_id_without_version_hash` and `random_fixed_type_id`
-//!
-//! - `fixed_type_id`: Generate a unique id for the type, with a [`FixedId`] that [`rapidhash::rapidhash`] the name you provided,
-//!    the version is also hashed into the [`FixedId`]. Version defaults to `(0,0,0)`, use `#[FixedTypeIdVersion((0,1,0))]` to change it.
-//!    Use it when you want that different versions of your type have different ids.
-//! - `fixed_type_id_without_version_hash`: Generate a unique id for the type, with a [`FixedId`] that [`rapidhash::rapidhash`] the name you provided,
-//!    without version hashed into the [`FixedId`]. Use it when you want that different versions of your type have the same id.
-//! - `random_fixed_type_id`: Generate a random id for the type, with a [`FixedId`] that random generated for each build.
-//!
-//! All these macros can be used with:
-//!
-//! - `#[FixedTypeIdVersion((x,y,z))]`: Set the version to `(x,y,z)`.
-//! - `#[FixedTypeIdFile("filename.toml")]`: Store the type id into a file, so you can use it for debug, make sure the file already exists.
-//! - `#[FixedTypeIdEqualTo("other_type")]`: Make the type id [`FixedId`] equal to `other_type`, so the two types have the same id, but different type names, and versions.
-//!
-//! ## Usage
-//!
-//! The example usage:
-//!
-//! ```rust
-//! use fixed_type_id::{FixedTypeId, FixedId, fixed_type_id, name_version_to_hash};
-//! use std::hash::Hasher;
-//!
-//! mod m {
-//!     use fixed_type_id::{FixedTypeId, FixedId, fixed_type_id, FixedVersion};
-//!     pub trait Q {}
-//!     pub trait W {}
-//!     pub trait E<T> {}
-//!     fixed_type_id!{
-//!        #[FixedTypeIdVersion((0,1,0))]
-//!        // default to (0,0,0)
-//!        // #[FixedTypeIdFile("types.toml")]
-//!        // no default, but when store into file, version will be dropped, so only use it for debug.
-//!        dyn m::Q; // type name is "dyn m::Q", it only store the type name you provided, without modification.
-//!        dyn W; // type name is "dyn W", though `W` is under `m` module, it still store "dyn W"
-//!        dyn E<u8>; // type name is "dyn E<u8>"
-//!        A; // type name is "A"
-//!        B<u8>; // type name is "B<u8>"
-//!     }
-//!     pub struct A;
-//!     pub struct B<T> {
-//!        pub t: T
-//!     }
-//!     impl Q for A {}
-//! }
-//! use m::*;
-//! assert_eq!(<dyn Q>::TYPE_ID.0, name_version_to_hash("dyn m::Q", &(0,1,0).into()));
-//! assert_eq!(<dyn Q>::TYPE_NAME, "dyn m::Q");
-//! assert_eq!(<A as FixedTypeId>::TYPE_VERSION, (0,1,0).into());
-//! assert_eq!(<A as FixedTypeId>::TYPE_NAME, "A");
-//! ```
-//!
-//! Also, you can define this trait yoursellf:
-//!
-//! ```rust
-//! use fixed_type_id::{FixedTypeId, FixedId, FixedVersion};
-//! use rapidhash::rapidhash;
-//!
-//! struct MyType;
-//!
-//! impl FixedTypeId for MyType {
-//!     const TYPE_NAME: &'static str = "MyType";
-//!     const TYPE_ID: FixedId = FixedId::from_type_name(Self::TYPE_NAME, None);
-//!     const TYPE_VERSION: FixedVersion = FixedVersion::new(0, 0, 0);
-//! }
-//!
-//! assert_eq!(<MyType as FixedTypeId>::TYPE_NAME, "MyType");
-//! assert_eq!(<MyType as FixedTypeId>::TYPE_ID.0, rapidhash::rapidhash("MyType".as_bytes()));
-//! assert_eq!(<MyType as FixedTypeId>::TYPE_VERSION, (0,0,0).into());
-//! ```
-//!
+#![doc = include_str!("../../README.md")]
 
 use core::fmt;
 
@@ -92,12 +11,15 @@ pub use fixed_type_id_macros::{
 };
 use semver::Version;
 
+/// The length of the type name, can be configured by feature flags `len128`, `len64` and `len256`, the default is `len128`.
 #[cfg(feature = "len128")]
 pub const CONST_TYPENAME_LEN: usize = 128;
 
+/// The length of the type name, can be configured by feature flags `len128`, `len64` and `len256`, the default is `len128`.
 #[cfg(feature = "len64")]
 pub const CONST_TYPENAME_LEN: usize = 64;
 
+/// The length of the type name, can be configured by feature flags `len128`, `len64` and `len256`, the default is `len128`.
 #[cfg(feature = "len256")]
 pub const CONST_TYPENAME_LEN: usize = 256;
 
@@ -130,12 +52,10 @@ impl FixedId {
                 let version_hash = rapidhash::rapidhash(&version.const_to_bytes());
                 // then combine name_hash and version_hash as a new `&[u8]`
                 //
-                // let combined_hash = rapidhash::rapidhash(&u64s_to_bytes(&[name_hash, version_hash]));
+                // rapidhash::rapidhash(&u64s_to_bytes(&[name_hash, version_hash]));
                 //
                 // or use rapid_mix
-                let combined_hash = rapid_mix(name_hash, version_hash);
-                // combine them
-                combined_hash
+                rapid_mix(name_hash, version_hash)
             }
         };
         FixedId(hash)
@@ -218,10 +138,14 @@ pub trait FixedTypeId {
     }
 }
 
+/// A semver for a type, but without pre release, build meta etc.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FixedVersion {
+    /// The major version number.
     pub major: u64,
+    /// The minor version number.
     pub minor: u64,
+    /// The patch version number.
     pub patch: u64,
 }
 
@@ -281,6 +205,9 @@ impl From<Version> for FixedVersion {
     }
 }
 
+/// Get the hash from a type name and version, use the same procedure as [`FixedId::from_type_name`], but better performance.
+///
+/// It can't be used in const context.
 pub fn name_version_to_hash(name: &str, version: &FixedVersion) -> u64 {
     let name_hash = rapidhash::rapidhash(name.as_bytes());
     // let version_hash = rapidhash::rapidhash(&version.as_bytes());
@@ -424,10 +351,12 @@ macro_rules! implement_wrapper_fixed_type_id {
   };
 }
 
+/// Helper function to convert a fixed string [`fixedstr::fstr`] to a string.
 pub const fn fstr_to_str<const N: usize>(fstr: &'static fixedstr::fstr<N>) -> &'static str {
     unsafe { core::str::from_raw_parts(fstr.to_ptr(), fstr.len()) }
 }
 
+/// Helper function to convert a slice of string to a fixed string [`fixedstr::fstr`].
 pub const fn slice_to_fstr<const N: usize>(slice: &[&str]) -> fixedstr::fstr<N> {
     fixedstr::fstr::<N>::const_create_from_str_slices(slice)
 }
@@ -564,10 +493,7 @@ impl<T: FixedTypeId> ConstTypeName for &'_ mut [T] {
 
 #[cfg(test)]
 mod tests {
-    use std::hash::Hasher;
     use std::marker::PhantomData;
-
-    use rapidhash::{rapidhash, RapidInlineHasher};
 
     use super::{fixed_type_id, fixed_type_id_without_version_hash};
 
@@ -607,7 +533,7 @@ mod tests {
             }
         }
         mod b {
-            use super::{FixedId, FixedTypeId, FixedVersion};
+            use super::FixedTypeId;
             pub struct A;
             impl FixedTypeId for A {
                 const TYPE_NAME: &'static str = "A";
