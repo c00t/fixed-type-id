@@ -1,6 +1,6 @@
 [package]
 name = "fixed-type-id"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 authors = ["cupofc0t <cupofc0t@gmail.com>"]
@@ -21,4 +21,4 @@ default = ["len128"]
 len64 = []
 len128 = []
 len256 = []
-erase_name = []
+erase_name = ["fixed-type-id-macros/erase_name"]

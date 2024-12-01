@@ -58,6 +58,25 @@ assert_eq!(<A as FixedTypeId>::TYPE_VERSION, (0,1,0).into());
 assert_eq!(<A as FixedTypeId>::TYPE_NAME, "A");
 ```
 
+If you want to define for your generic struct, you can use [`implement_wrapper_fixed_type_id`]:
+
+```rust
+use fixed_type_id::{FixedTypeId, FixedId, ConstTypeName, fstr_to_str, FixedVersion, implement_wrapper_fixed_type_id};
+use std::ops::Add;
+
+pub struct MyStruct<T: Add> {
+    pub x: T,
+}
+
+implement_wrapper_fixed_type_id!{
+    // You can define a typename with different module path, but it's not recommended.
+    // Generally, you should define it in the same module as the struct for better readability.
+    MyStruct<T:Add> => "SomeSpecialModule::MyStruct"
+}
+
+assert_eq!(<MyStruct<u8> as FixedTypeId>::TYPE_NAME, "SomeSpecialModule::MyStruct<u8>");
+```
+
 Also, you can define this trait yoursellf:
 
 ```rust
@@ -86,10 +105,22 @@ For standard libraries types, the version is always `(0,0,0)`, in the future, it
 
 Currently, this crate implement [`FixedTypeId`] for these types:
 
-- `()`
+- `()`, `Infallible`
 - `T` for all primitive types, like `u8`, `i16`, `f32`, `str`, `String`, `bool` etc.
 - `&T`, `&mut T` for all primitive types
-- `Box<T>`, `Vec<T>`, `HashMap<K, V>`, `PhantomData<T>` for all generic types that implement [`FixedTypeId`]
+- `Box<T>`, `Vec<T>`, `HashMap<K, V>`, `PhantomData<T>`, `NonZero<T>`, `fn(T) -> R`, `fn() -> R` for all generic types that implement [`FixedTypeId`]
+- `(T,)`, `(T,U)`, `(T,U,V)`... `(T1,..., T16)` for all generic types that implement [`FixedTypeId`]
+- `[T; N]` for all `T` that implement [`FixedTypeId`], but there is a limit for `N`, only `N <= 32` or some special numbers(`64`, `128`, `256`,..., `768`, `1024`, `2048`,...,`65535`) are supported, other numbers will just leave it as `N`. If you know how to generate `&str` for `const N: usize` in const context, you can submit a PR to add it.
+
+#### Type Name Length
+
+When you want to implement [`FixedTypeId`] for your types with generic parameters, you need to provide a dynamic generated `&str` as type name either 1. in const context or 2. store a `&[&str]` in const and then concat them at runtime.
+
+If we choose to generate it in const context, because the only way i know to dynamically generate a `&str` in const context is to **fill a fixed length array `[u8;N]`**, and this array will be persisted into the binary, so the length of the type name is limited by **the binary size**. Currently, the length can be configured by feature flags `len64`, `len128` and `len256`, the default is `len128`, it means the max length of the type name is 128 bytes.
+
+If we choose to store a `&[&str]` in const and then concat them at runtime, the return type of [`FixedTypeId::ty_name()`] will be `String`, it's different from the return type of [`core::any::type_name`], which is `&'static str`. It makes it difficult to just replace [`core::any::type_name`] with [`type_name`] or [`FixedTypeId::ty_name()`].
+
+So currently we choose to generate it in const context.
 
 #### Differences between `fixed_type_id`, `fixed_type_id_without_version_hash` and `random_fixed_type_id`
 
@@ -105,3 +136,9 @@ All these macros can be used with:
 - `#[FixedTypeIdVersion((x,y,z))]`: Set the version to `(x,y,z)`.
 - `#[FixedTypeIdFile("filename.toml")]`: Store the type id into a file, so you can use it for debug, make sure the file already exists.
 - `#[FixedTypeIdEqualTo("other_type")]`: Make the type id [`FixedId`] equal to `other_type`, so the two types have the same id, but different type names, and versions.
+
+#### Erase Type Name
+
+It can be configured by feature flag `erase_name`, default is disabled.
+
+Currently, it only works for implementation of [`FixedTypeId`] by `fixed_type_id` and `fixed_type_id_without_version_hash`.

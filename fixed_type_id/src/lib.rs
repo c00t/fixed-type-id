@@ -1,8 +1,12 @@
 #![deny(missing_docs)]
+#![allow(internal_features)]
 #![allow(incomplete_features)]
 #![feature(str_from_raw_parts)]
 #![feature(generic_const_exprs)]
+#![feature(nonzero_internals)]
 #![doc = include_str!("../README.md")]
+
+mod remote_impl;
 
 use core::fmt;
 
@@ -81,6 +85,60 @@ const fn u64s_to_bytes<const N: usize>(slice: &[u64; N]) -> [u8; N * 8] {
     }
 
     bytes
+}
+
+/// for n <= 32, returns a static string
+/// for n > 32, returns "N"
+/// for special usize, eg 64, 128, 256, 512, 768, 1024, 2048, 4096, 8192, 16384, 32768, 65536, returns a static string
+pub const fn usize_to_str(n: usize) -> &'static str {
+    match n {
+        0 => "0",
+        1 => "1",
+        2 => "2",
+        3 => "3",
+        4 => "4",
+        5 => "5",
+        6 => "6",
+        7 => "7",
+        8 => "8",
+        9 => "9",
+        10 => "10",
+        11 => "11",
+        12 => "12",
+        13 => "13",
+        14 => "14",
+        15 => "15",
+        16 => "16",
+        17 => "17",
+        18 => "18",
+        19 => "19",
+        20 => "20",
+        21 => "21",
+        22 => "22",
+        23 => "23",
+        24 => "24",
+        25 => "25",
+        26 => "26",
+        27 => "27",
+        28 => "28",
+        29 => "29",
+        30 => "30",
+        31 => "31",
+        32 => "32",
+        64 => "64",
+        128 => "128",
+        256 => "256",
+        512 => "512",
+        768 => "768",
+        1024 => "1024",
+        2048 => "2048",
+        4096 => "4096",
+        8192 => "8192",
+        16384 => "16384",
+        32768 => "32768",
+        65536 => "65536",
+        _ => "N",
+    }
 }
 
 /// Copy from [`rapidhash`]
@@ -268,55 +326,45 @@ pub fn type_version<T: ?Sized + FixedTypeId>() -> FixedVersion {
     T::TYPE_VERSION
 }
 
-// implement the trait for primitive types in prelude
-fixed_type_id_without_version_hash! {
-  u8;
-  u16;
-  u32;
-  u64;
-  u128;
-  usize;
-  i8;
-  i16;
-  i32;
-  i64;
-  i128;
-  isize;
-  f32;
-  f64;
-  bool;
-  char;
-  String;
-  str;
-}
-
-// implement FixedTypeId for basic reference types
-impl<T: FixedTypeId + ?Sized> FixedTypeId for &T {
-    const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
-}
-
-impl<T: FixedTypeId + ?Sized> ConstTypeName for &'_ T {
-    const RAW_SLICE: &'static [&'static str] = &["&", T::TYPE_NAME];
-}
-
-impl<T: FixedTypeId + ?Sized> FixedTypeId for &mut T {
-    const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
-}
-
-impl<T: FixedTypeId + ?Sized> ConstTypeName for &'_ mut T {
-    const RAW_SLICE: &'static [&'static str] = &["&mut", T::TYPE_NAME];
-}
-
-// Unit type
-impl FixedTypeId for () {
-    const TYPE_NAME: &'static str = "()";
-}
-
-/// Implements UniqueTypeId and ConstTypeName for wrapper types that delegate to their inner type(s).
+/// Implements [`FixedTypeId`] and [`ConstTypeName`] for wrapper types with 1 or moregeneric parameters which implement [`FixedTypeId`].
 ///
+/// It's useful for types like `Vec<T>`, `HashMap<K,V>`, `Option<T>`, etc.
+///
+/// When you want to implement [`FixedTypeId`] for types with 0 generic parameters, use [`fixed_type_id!`] or [`fixed_type_id_without_version_hash!`] instead,
+/// or implement it manually.
 #[macro_export]
 macro_rules! implement_wrapper_fixed_type_id {
-  (@impl_generics $wrapper:ident, ($first:ident $(, $rest:ident)*), $prefix:expr) => {
+    // New arm for handling generic with bounds
+    (@impl_generics $wrapper:ident, ($first:ident: $bound:path $(, $rest:ident)*), $prefix:expr) => {
+        impl<$first $(, $rest)*> FixedTypeId for $wrapper<$first $(, $rest)*>
+        where
+            $first: FixedTypeId + $bound,
+            $($rest: FixedTypeId,)*
+            Self: ConstTypeName,
+        {
+            const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
+        }
+
+        impl<$first $(, $rest)*> ConstTypeName for $wrapper<$first $(, $rest)*>
+        where
+            $first: FixedTypeId + $bound,
+            $($rest: FixedTypeId,)*
+        {
+            const RAW_SLICE: &[&str] = &[
+                $prefix,
+                "<",
+                $first::TYPE_NAME,
+                $(
+                    ",",
+                    $rest::TYPE_NAME,
+                )*
+                ">"
+            ];
+        }
+    };
+
+    // Original arm for simple generics (keep for backward compatibility)
+    (@impl_generics $wrapper:ident, ($first:ident $(, $rest:ident)*), $prefix:expr) => {
         impl<$first $(, $rest)*> FixedTypeId for $wrapper<$first $(, $rest)*>
         where
             $first: FixedTypeId,
@@ -344,11 +392,12 @@ macro_rules! implement_wrapper_fixed_type_id {
         }
     };
 
-    ($($wrapper:ident<$first:ident $(, $rest:ident)*> => $prefix:expr);* $(;)?) => {
-      $(
-        implement_wrapper_fixed_type_id!(@impl_generics $wrapper, ($first $(, $rest)*), $prefix);
-      )*
-  };
+    // Entry point - handle both bounded and unbounded generics
+    ($($wrapper:ident<$first:ident $(: $bound:path)? $(, $rest:ident)*> => $prefix:expr);* $(;)?) => {
+        $(
+            implement_wrapper_fixed_type_id!(@impl_generics $wrapper, ($first $(: $bound)? $(, $rest)*), $prefix);
+        )*
+    };
 }
 
 /// Helper function to convert a fixed string [`fixedstr_ext::fstr`] to a string.
@@ -361,146 +410,12 @@ pub const fn slice_to_fstr<const N: usize>(slice: &[&str]) -> fixedstr_ext::fstr
     fixedstr_ext::fstr::<N>::const_create_from_str_slice(slice)
 }
 
-use std::collections::{BTreeMap, HashMap};
-use std::marker::PhantomData;
-
-implement_wrapper_fixed_type_id! {
-  PhantomData<T> => "core::marker::PhantomData";
-  Vec<T> => "alloc::vec::Vec";
-  HashMap<K,V> => "std::collections::HashMap";
-  Box<T> => "alloc::boxed::Box";
-  BTreeMap<K,V> => "alloc::collections::BTreeMap";
-  Option<T> => "core::option::Option";
-}
-
-/// Internal macro to implement FixedTypeId for tuples.
-macro_rules! implement_tuple_fixed_type_id {
-    () => {
-        implement_tuple_fixed_type_id!(@internal 2, T1, T2);
-        implement_tuple_fixed_type_id!(@internal 3, T1, T2, T3);
-        implement_tuple_fixed_type_id!(@internal 4, T1, T2, T3, T4);
-        implement_tuple_fixed_type_id!(@internal 5, T1, T2, T3, T4, T5);
-        implement_tuple_fixed_type_id!(@internal 6, T1, T2, T3, T4, T5, T6);
-        implement_tuple_fixed_type_id!(@internal 7, T1, T2, T3, T4, T5, T6, T7);
-        implement_tuple_fixed_type_id!(@internal 8, T1, T2, T3, T4, T5, T6, T7, T8);
-        implement_tuple_fixed_type_id!(@internal 9, T1, T2, T3, T4, T5, T6, T7, T8, T9);
-        implement_tuple_fixed_type_id!(@internal 10, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
-        implement_tuple_fixed_type_id!(@internal 11, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
-        implement_tuple_fixed_type_id!(@internal 12, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
-    };
-
-    (@internal $n:tt, $first:ident $(, $rest:ident)*) => {
-        impl<$first $(, $rest)*> FixedTypeId for ($first $(, $rest)*)
-        where
-            $first: FixedTypeId,
-            $($rest: FixedTypeId,)*
-            Self: ConstTypeName,
-        {
-            const TYPE_NAME: &'static str = fstr_to_str(&<Self as ConstTypeName>::TYPE_NAME_FSTR);
-        }
-
-        impl<$first: FixedTypeId $(, $rest: FixedTypeId)*> ConstTypeName for ($first $(, $rest)*) {
-            const RAW_SLICE: &[&str] = &[
-                "(",
-                $first::TYPE_NAME,
-                $(
-                    ",",
-                    $rest::TYPE_NAME,
-                )*
-                ")"
-            ];
-        }
-    };
-}
-
-implement_tuple_fixed_type_id!();
-
-/// Internal macro to implement [`FixedTypeId`] for fixed size arrays.
-macro_rules! implement_array_fixed_type_id {
-  () => {
-      implement_array_fixed_type_id!(@internal 0);
-      implement_array_fixed_type_id!(@internal 1);
-      implement_array_fixed_type_id!(@internal 2);
-      implement_array_fixed_type_id!(@internal 3);
-      implement_array_fixed_type_id!(@internal 4);
-      implement_array_fixed_type_id!(@internal 5);
-      implement_array_fixed_type_id!(@internal 6);
-      implement_array_fixed_type_id!(@internal 7);
-      implement_array_fixed_type_id!(@internal 8);
-      implement_array_fixed_type_id!(@internal 9);
-      implement_array_fixed_type_id!(@internal 10);
-      implement_array_fixed_type_id!(@internal 11);
-      implement_array_fixed_type_id!(@internal 12);
-      implement_array_fixed_type_id!(@internal 13);
-      implement_array_fixed_type_id!(@internal 14);
-      implement_array_fixed_type_id!(@internal 15);
-      implement_array_fixed_type_id!(@internal 16);
-      implement_array_fixed_type_id!(@internal 17);
-      implement_array_fixed_type_id!(@internal 18);
-      implement_array_fixed_type_id!(@internal 19);
-      implement_array_fixed_type_id!(@internal 20);
-      implement_array_fixed_type_id!(@internal 21);
-      implement_array_fixed_type_id!(@internal 22);
-      implement_array_fixed_type_id!(@internal 23);
-      implement_array_fixed_type_id!(@internal 24);
-      implement_array_fixed_type_id!(@internal 25);
-      implement_array_fixed_type_id!(@internal 26);
-      implement_array_fixed_type_id!(@internal 27);
-      implement_array_fixed_type_id!(@internal 28);
-      implement_array_fixed_type_id!(@internal 29);
-      implement_array_fixed_type_id!(@internal 30);
-      implement_array_fixed_type_id!(@internal 31);
-      implement_array_fixed_type_id!(@internal 32);
-  };
-
-  (@internal $n:tt) => {
-      impl<T: FixedTypeId> FixedTypeId for [T; $n]
-      where
-          Self: ConstTypeName,
-      {
-          const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
-      }
-
-      impl<T: FixedTypeId> ConstTypeName for [T; $n] {
-          const RAW_SLICE: &[&str] = &[
-              "[",
-              T::TYPE_NAME,
-              ";",
-              stringify!($n),
-              "]"
-          ];
-      }
-  };
-}
-
-implement_array_fixed_type_id!();
-
-impl<T: FixedTypeId> FixedTypeId for &[T] {
-    const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
-}
-
-impl<T: FixedTypeId> ConstTypeName for &'_ [T] {
-    const RAW_SLICE: &'static [&'static str] = &["&[", T::TYPE_NAME, "]"];
-}
-
-impl<T: FixedTypeId> FixedTypeId for &mut [T] {
-    const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
-}
-
-impl<T: FixedTypeId> ConstTypeName for &'_ mut [T] {
-    const RAW_SLICE: &'static [&'static str] = &["&mut [", T::TYPE_NAME, "]"];
-}
-
 #[cfg(test)]
 mod tests {
-    use std::marker::PhantomData;
-
-    use super::{fixed_type_id, fixed_type_id_without_version_hash};
-
     use super::*;
 
     #[test]
-    fn test_unique_id_typeid_equal_to() {
+    fn unique_id_typeid_equal_to() {
         pub struct A1;
         pub struct A2;
         fixed_type_id_without_version_hash! {
@@ -521,7 +436,30 @@ mod tests {
     }
 
     #[test]
-    fn test_macro_manual_diff() {
+    fn unique_id_generic_ne() {
+        pub struct A<T> {
+            pub _t: T,
+        }
+        fixed_type_id! {
+          A<u8>;
+          A<u16>;
+        }
+        assert_eq!(<A<u8> as FixedTypeId>::TYPE_NAME, "A<u8>");
+        assert_eq!(<A<u16> as FixedTypeId>::TYPE_NAME, "A<u16>");
+        assert_ne!(
+            <A<u8> as FixedTypeId>::TYPE_ID,
+            <A<u16> as FixedTypeId>::TYPE_ID
+        );
+        assert_eq!(
+            <A<u8> as FixedTypeId>::TYPE_VERSION,
+            <A<u16> as FixedTypeId>::TYPE_VERSION
+        );
+        assert_eq!(<A<u8> as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
+        assert_eq!(<A<u16> as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
+    }
+
+    #[test]
+    fn macro_manual_diff() {
         // with versin hash, default implementation
         mod a {
             use super::fixed_type_id;
@@ -555,114 +493,6 @@ mod tests {
         assert_eq!(
             <b::A as FixedTypeId>::TYPE_NAME,
             <a::A as FixedTypeId>::TYPE_NAME
-        );
-    }
-
-    #[test]
-    fn test_unique_id_generic_ne() {
-        pub struct A<T> {
-            pub _t: T,
-        }
-        fixed_type_id! {
-          A<u8>;
-          A<u16>;
-        }
-        assert_eq!(<A<u8> as FixedTypeId>::TYPE_NAME, "A<u8>");
-        assert_eq!(<A<u16> as FixedTypeId>::TYPE_NAME, "A<u16>");
-        assert_ne!(
-            <A<u8> as FixedTypeId>::TYPE_ID,
-            <A<u16> as FixedTypeId>::TYPE_ID
-        );
-        assert_eq!(
-            <A<u8> as FixedTypeId>::TYPE_VERSION,
-            <A<u16> as FixedTypeId>::TYPE_VERSION
-        );
-        assert_eq!(<A<u8> as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
-        assert_eq!(<A<u16> as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
-        let x = "xf";
-        fn f<T: FixedTypeId>(x: T) {
-            assert_eq!(x.ty_id(), <T as FixedTypeId>::TYPE_ID);
-        }
-        f(x);
-    }
-
-    #[test]
-    fn test_tuple_type() {
-        assert_eq!(<(String, u32) as FixedTypeId>::TYPE_NAME, "(String,u32)");
-    }
-
-    #[test]
-    fn test_more_types() {
-        // Test basic type name formatting
-        assert_eq!(
-            <Vec<(String, u32)> as FixedTypeId>::TYPE_NAME,
-            "alloc::vec::Vec<(String,u32)>"
-        );
-        assert_eq!(
-            <PhantomData<i32> as FixedTypeId>::TYPE_NAME,
-            "core::marker::PhantomData<i32>"
-        );
-        assert_eq!(<((), String) as FixedTypeId>::TYPE_NAME, "((),String)");
-
-        // Test array type formatting
-        assert_eq!(<[u8; 10] as FixedTypeId>::TYPE_NAME, "[u8;10]");
-        assert_eq!(<[(u8, u32); 20] as FixedTypeId>::TYPE_NAME, "[(u8,u32);20]");
-
-        // Test complex nested types
-        assert_eq!(
-            <HashMap<String, Vec<u32>> as FixedTypeId>::TYPE_NAME,
-            "std::collections::HashMap<String,alloc::vec::Vec<u32>>"
-        );
-        assert_eq!(
-            <Option<Box<Vec<String>>> as FixedTypeId>::TYPE_NAME,
-            "core::option::Option<alloc::boxed::Box<alloc::vec::Vec<String>>>"
-        );
-        assert_eq!(
-            <(Vec<u8>, HashMap<String, u32>) as FixedTypeId>::TYPE_NAME,
-            "(alloc::vec::Vec<u8>,std::collections::HashMap<String,u32>)"
-        );
-
-        // Test reference types
-        assert_eq!(<&str as FixedTypeId>::TYPE_NAME, "&str");
-        assert_eq!(<&[u8] as FixedTypeId>::TYPE_NAME, "&[u8]");
-
-        // Test type ID comparisons
-        assert_ne!(
-            <[u8; 10] as FixedTypeId>::TYPE_ID,
-            <[(u8, u32); 20] as FixedTypeId>::TYPE_ID
-        );
-        assert_ne!(
-            <Vec<u8> as FixedTypeId>::TYPE_ID,
-            <Vec<u16> as FixedTypeId>::TYPE_ID
-        );
-        assert_ne!(
-            <Option<String> as FixedTypeId>::TYPE_ID,
-            <Option<&str> as FixedTypeId>::TYPE_ID
-        );
-        assert_ne!(
-            <HashMap<String, u32> as FixedTypeId>::TYPE_ID,
-            <BTreeMap<String, u32> as FixedTypeId>::TYPE_ID
-        );
-
-        // Test that same types have same IDs
-        assert_eq!(
-            <Vec<u8> as FixedTypeId>::TYPE_ID,
-            <Vec<u8> as FixedTypeId>::TYPE_ID
-        );
-        assert_eq!(
-            <Option<String> as FixedTypeId>::TYPE_ID,
-            <Option<String> as FixedTypeId>::TYPE_ID
-        );
-
-        // Test version consistency
-        assert_eq!(<Vec<u8> as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
-        assert_eq!(
-            <HashMap<String, u32> as FixedTypeId>::TYPE_VERSION,
-            (0, 0, 0).into()
-        );
-        assert_eq!(
-            <Option<Box<Vec<String>>> as FixedTypeId>::TYPE_VERSION,
-            (0, 0, 0).into()
         );
     }
 }
