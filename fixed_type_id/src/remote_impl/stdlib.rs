@@ -2,8 +2,7 @@ use fixed_type_id_macros::fixed_type_id;
 
 use crate::usize_to_str;
 use crate::{
-    fixed_type_id_without_version_hash, fstr_to_str, implement_wrapper_fixed_type_id,
-    ConstTypeName, FixedId, FixedTypeId, FixedVersion,
+    fstr_to_str, implement_wrapper_fixed_type_id, ConstTypeName, FixedId, FixedTypeId, FixedVersion,
 };
 
 // implement the trait for primitive types in prelude
