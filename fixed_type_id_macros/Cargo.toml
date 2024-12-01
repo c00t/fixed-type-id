@@ -1,6 +1,6 @@
 [package]
 name = "fixed-type-id-macros"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 authors = ["cupofc0t <cupofc0t@gmail.com>"]
@@ -16,7 +16,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = { version = "1.0", features = ["nightly"] }
 quote = "1.0.21"
-syn = {version = "2", features = ["full"]}
+syn = { version = "2", features = ["full"] }
 rand = "0.8.5"
 rapidhash = "1.1.0"
 
@@ -25,4 +25,3 @@ fixed-type-id = { path = "../fixed_type_id" }
 
 [features]
 erase_name = []
-

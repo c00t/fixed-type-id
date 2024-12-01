@@ -12,7 +12,7 @@ mod fixed_type_id;
 ///
 /// Basic usage with trait objects:
 /// ```
-/// mod some {
+/// # mod some {
 /// use fixed_type_id::fixed_type_id;
 /// use fixed_type_id::{FixedId, FixedTypeId, FixedVersion};
 ///
@@ -21,7 +21,7 @@ mod fixed_type_id;
 /// fixed_type_id! {
 ///     dyn MyTrait
 /// }
-/// }
+/// # }
 /// ```
 ///
 /// With version-based uniqueness (commonly used pattern):
@@ -42,7 +42,7 @@ mod fixed_type_id;
 ///
 /// With file-based uniqueness and filename:
 /// ```
-/// mod some {
+/// # mod some {
 /// use fixed_type_id::fixed_type_id;
 /// use fixed_type_id::{FixedId, FixedTypeId, FixedVersion};
 ///
@@ -52,7 +52,7 @@ mod fixed_type_id;
 ///     #[FixedTypeIdFile("ids.toml")]
 ///     dyn MyTrait
 /// }
-/// }
+/// # }
 /// ```
 ///
 /// Real-world example from some APIs:
