@@ -1,6 +1,6 @@
 [package]
 name = "fixed-type-id"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 authors = ["cupofc0t <cupofc0t@gmail.com>"]
@@ -11,10 +11,14 @@ categories = []
 keywords = ["typeid", "type-id", "reflection"]
 
 [dependencies]
-fixed-type-id-macros = { path = "../fixed_type_id_macros", version = "0.1.0" }
+fixed-type-id-macros = { path = "../fixed_type_id_macros", version = "0.1.1" }
 fixedstr-ext = { version = "0.5.8", features = ["fstr"] }
+glam = { version = "0.29.2", optional = true }
+kollect = { version = "0.4.1", optional = true }
+macaw = { version = "0.19.1", optional = true }
 rapidhash = "1.1.0"
 semver = "1.0.23"
+ultraviolet = { version = "0.9.2", optional = true, features = ["f64", "int"]}
 
 [features]
 default = ["len128"]
@@ -22,3 +26,7 @@ len64 = []
 len128 = []
 len256 = []
 erase_name = ["fixed-type-id-macros/erase_name"]
+kollect = ["dep:kollect"]
+glam = ["dep:glam"]
+macaw = ["dep:macaw"]
+ultraviolet = ["dep:ultraviolet"]

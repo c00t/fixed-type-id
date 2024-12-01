@@ -54,6 +54,19 @@ impl FixedTypeId for () {
 //     const TYPE_NAME: &'static str = "!";
 // }
 
+// dyn Any
+impl FixedTypeId for dyn Any {
+    const TYPE_NAME: &'static str = "dyn core::any::Any";
+}
+
+impl<T: FixedTypeId + ?Sized> FixedTypeId for Box<T> {
+    const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
+}
+
+impl<T: FixedTypeId + ?Sized> ConstTypeName for Box<T> {
+    const RAW_SLICE: &[&str] = &["alloc::boxed::Box<", T::TYPE_NAME, ">"];
+}
+
 use core::marker::PhantomData;
 use core::num::NonZero;
 use core::ops::Range;
@@ -61,14 +74,17 @@ use core::ops::RangeFrom;
 use core::ops::RangeTo;
 use core::ops::RangeToInclusive;
 use core::result::Result;
+use std::any::Any;
+use std::collections::VecDeque;
 use std::collections::{BTreeMap, HashMap};
 
 // impl types with 1 or more generic parameters
 implement_wrapper_fixed_type_id! {
   PhantomData<T> => "core::marker::PhantomData";
   Vec<T> => "alloc::vec::Vec";
-  HashMap<K,V> => "std::collections::HashMap";
-  Box<T> => "alloc::boxed::Box";
+  VecDeque<T> => "alloc::collections::VecDeque";
+  // HashMap<K,V> => "std::collections::HashMap";
+  // Box<T: ?Sized> => "alloc::boxed::Box";
   BTreeMap<K,V> => "alloc::collections::BTreeMap";
   Option<T> => "core::option::Option";
   Result<T,E> => "core::result::Result";
@@ -77,6 +93,20 @@ implement_wrapper_fixed_type_id! {
   RangeTo<T> => "core::ops::RangeTo";
   RangeToInclusive<T> => "core::ops::RangeToInclusive";
   NonZero<T: ZeroablePrimitive> => "core::num::nonzero::NonZero";
+}
+
+impl<K: FixedTypeId, V: FixedTypeId, S> FixedTypeId for HashMap<K, V, S> {
+    const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
+}
+
+impl<K: FixedTypeId, V: FixedTypeId, S> ConstTypeName for HashMap<K, V, S> {
+    const RAW_SLICE: &[&str] = &[
+        "std::collections::HashMap<",
+        K::TYPE_NAME,
+        ",",
+        V::TYPE_NAME,
+        ">",
+    ];
 }
 
 use core::convert::Infallible;

@@ -9,6 +9,7 @@
 mod remote_impl;
 
 use core::fmt;
+use std::hash::Hash;
 
 pub use fixed_type_id_macros::{
     fixed_type_id, fixed_type_id_without_version_hash, random_fixed_type_id,
@@ -29,8 +30,15 @@ pub const CONST_TYPENAME_LEN: usize = 256;
 
 /// A strong type for type id.
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct FixedId(pub u64);
+
+/// Just write internal [`u64`] with [`std::hash::Hasher::write_u64`].
+impl Hash for FixedId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.0);
+    }
+}
 
 impl FixedId {
     /// Get UniqueId of a type
