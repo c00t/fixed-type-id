@@ -30,6 +30,9 @@ pub const CONST_TYPENAME_LEN: usize = 256;
 
 /// A strong type for type id.
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct FixedId(pub u64);
 
@@ -189,22 +192,28 @@ pub trait FixedTypeId {
     const TYPE_VERSION: FixedVersion = FixedVersion::new(0, 0, 0);
 
     /// Returns the type name.
+    #[inline(always)]
     fn ty_name(&self) -> &'static str {
         Self::TYPE_NAME
     }
 
     /// Returns the type id number.
+    #[inline(always)]
     fn ty_id(&self) -> FixedId {
         Self::TYPE_ID
     }
 
     /// Returns the version for a type
+    #[inline(always)]
     fn ty_version(&self) -> FixedVersion {
         Self::TYPE_VERSION
     }
 }
 
 /// A semver for a type, but without pre release, build meta etc.
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FixedVersion {
     /// The major version number.
@@ -217,6 +226,7 @@ pub struct FixedVersion {
 
 impl FixedVersion {
     /// Create a new `FixedVersion`
+    #[inline(always)]
     pub const fn new(major: u64, minor: u64, patch: u64) -> Self {
         FixedVersion {
             major,
@@ -271,6 +281,12 @@ impl From<Version> for FixedVersion {
     }
 }
 
+impl From<FixedVersion> for Version {
+    fn from(value: FixedVersion) -> Self {
+        Version::new(value.major, value.minor, value.patch)
+    }
+}
+
 /// Get the hash from a type name and version, use the same procedure as [`FixedId::from_type_name`], but better performance.
 ///
 /// It can't be used in const context.
@@ -320,16 +336,19 @@ pub trait ConstTypeName {
 }
 
 /// A helper function to get the type name of a type.
+#[inline(always)]
 pub fn type_name<T: ?Sized + FixedTypeId>() -> &'static str {
     T::TYPE_NAME
 }
 
 /// A helper function to get the type id of a type.
+#[inline(always)]
 pub fn type_id<T: ?Sized + FixedTypeId>() -> FixedId {
     T::TYPE_ID
 }
 
 /// A helper function to get the version of a type.
+#[inline(always)]
 pub fn type_version<T: ?Sized + FixedTypeId>() -> FixedVersion {
     T::TYPE_VERSION
 }
