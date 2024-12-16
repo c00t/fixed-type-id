@@ -10,7 +10,7 @@
 mod remote_impl;
 
 use core::fmt;
-use std::hash::Hash;
+use std::{hash::Hash, marker::PhantomData};
 
 pub use fixed_type_id_macros::{
     fixed_type_id, fixed_type_id_without_version_hash, random_fixed_type_id,
@@ -453,140 +453,65 @@ pub const fn slice_to_fstr<const N: usize>(slice: &[&str]) -> fixedstr_ext::fstr
 
 /// A struct that contains a version and a data.
 ///
+/// Helper for serialize without [`Clone`].
+///
 /// Meant to be used by serialization and deserialization.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize))]
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
 #[cfg_attr(feature = "serde", serde(untagged))]
 #[derive(Debug, Clone, Copy)]
-pub enum FixedVersioned<T> {
+enum FixedVersionedSer<'a, T> {
     /// A type which's version is (0,0,0)
-    N(T),
+    N(&'a T),
     /// A type which's version is not (0,0,0)
-    V(FixedVersion, T),
+    V(FixedVersion, &'a T),
 }
 
-impl<T: FixedTypeId> From<T> for FixedVersioned<T> {
-    #[inline(always)]
-    fn from(data: T) -> Self {
+impl<'a, T: FixedTypeId> FixedVersionedSer<'a, T> {
+    ///
+    pub fn from(data: &'a T) -> Self {
         if type_version::<T>() == FixedVersion::new(0, 0, 0) {
-            FixedVersioned::N(data)
+            FixedVersionedSer::N(data)
         } else {
-            FixedVersioned::V(type_version::<T>(), data)
+            FixedVersionedSer::V(type_version::<T>(), data)
         }
     }
 }
 
-/// A helper function to serialize a versioned type using serde.
+/// A struct that contains a version and a data.
 ///
-/// ```rust
-/// # #![cfg_attr(feature = "specialization", feature(specialization))]
-/// # mod m {
-/// use serde::{Serialize, Deserialize};
-/// use fixed_type_id::versioned_serde_helper;
-/// use fixed_type_id::{fixed_type_id, FixedTypeId, FixedId, FixedVersion};
+/// Meant to be used by serialization and deserialization, which is very helpful for serde.
 ///
-/// #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-/// pub struct A {
-///     #[serde(serialize_with = "versioned_serde_helper")]
-///     pub a: B,
-///     #[serde(serialize_with = "versioned_serde_helper")]
-///     pub b: u8,
-///     #[serde(serialize_with = "versioned_serde_helper")]
-///     pub c: u16,
-/// }
-///
-/// #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-/// pub struct B;
-///
-/// fixed_type_id! {
-///     #[FixedTypeIdVersion((0,1,0))]
-///     B;
-/// }
-/// # }
-/// # use m::*;
-/// let a = A { a: B, b: 1, c: 2 };
-///
-/// let serialized = serde_json::to_string(&a).unwrap();
-/// assert_eq!(serialized, r#"{"a":[{"major":0,"minor":1,"patch":0},null],"b":1,"c":2}"#);
-///
-/// ```
-#[cfg(feature = "serde")]
-pub fn versioned_serde_helper<
-    S: ::serde::Serializer,
-    T: FixedTypeId + ::serde::Serialize + Clone,
->(
-    value: &T,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    use ::serde::Serialize;
-    FixedVersioned::from(value.clone()).serialize(serializer)
+/// See [fixed_revision](https://github.com/c00t/fixed-type-id/tree/main/fixed_revision) for more details.
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
+#[derive(Debug, Clone, Copy)]
+pub struct FixedVersioned<Data, VDef = Data> {
+    /// The version of the type.
+    pub version: FixedVersion,
+    /// The data of the type.
+    pub data: Data,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    _version_def: PhantomData<VDef>,
 }
 
-/// A helper function to deserialize a versioned type using serde.
-///
-/// ```rust
-/// # #![cfg_attr(feature = "specialization", feature(specialization))]
-/// # mod m {
-/// use serde::{Serialize, Deserialize};
-/// use fixed_type_id::{
-///     versioned_deserde_helper,
-///     versioned_serde_helper,
-/// };
-/// use fixed_type_id::{fixed_type_id, FixedTypeId, FixedId, FixedVersion};
-///
-/// #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
-/// pub struct A {
-///     #[serde(
-///         deserialize_with = "versioned_deserde_helper",
-///         serialize_with = "versioned_serde_helper",
-///     )]
-///     pub a: B,
-///     #[serde(
-///         deserialize_with = "versioned_deserde_helper",
-///         serialize_with = "versioned_serde_helper",
-///     )]
-///     pub b: u8,
-///     #[serde(
-///         deserialize_with = "versioned_deserde_helper",
-///         serialize_with = "versioned_serde_helper",
-///     )]
-///     pub c: u16,
-/// }
-///
-/// #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
-/// pub struct B;
-///
-/// fixed_type_id! {
-///     #[FixedTypeIdVersion((0,1,0))]
-///     B;
-/// }
-/// # }
-/// # use m::*;
-/// let a = A { a: B, b: 1, c: 2 };
-///
-/// let serialized = serde_json::to_string(&a).unwrap();
-/// assert_eq!(serialized, r#"{"a":[{"major":0,"minor":1,"patch":0},null],"b":1,"c":2}"#);
-///
-/// let deserialized: A = serde_json::from_str(&serialized).unwrap();
-/// assert_eq!(deserialized, a);
-/// ```
-#[cfg(feature = "serde")]
-pub fn versioned_deserde_helper<
-    'de,
-    D: ::serde::Deserializer<'de>,
-    T: FixedTypeId + ::serde::Deserialize<'de>,
->(
-    deserializer: D,
-) -> Result<T, D::Error> {
-    let value: FixedVersioned<T> = ::serde::Deserialize::deserialize(deserializer)?;
-    let value = match value {
-        FixedVersioned::N(value) => value,
-        FixedVersioned::V(_, value) => value,
-    };
-    Ok(value)
+impl<Data: From<VDef>, VDef: FixedTypeId> From<VDef> for FixedVersioned<Data, VDef> {
+    #[inline(always)]
+    fn from(data: VDef) -> Self {
+        // debug_assert_eq!(type_version::<VDef>(), type_version::<Data>());
+        FixedVersioned {
+            version: type_version::<VDef>(),
+            data: data.into(),
+            _version_def: Default::default(),
+        }
+    }
 }
 
 #[cfg(feature = "specialization")]
@@ -697,6 +622,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "specialization")]
     #[test]
     fn specialization_for_any_type() {
         pub struct A {

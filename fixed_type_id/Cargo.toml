@@ -24,7 +24,7 @@ serde = { version = "1.0.216", optional = true, features = ["derive"] }
 ultraviolet = { version = "0.9.2", optional = true, features = ["f64", "int"]}
 
 [features]
-default = ["len128", "serde", "rkyv", "specialization"]
+default = ["len128", "serde", "rkyv"]
 len64 = []
 len128 = []
 len256 = []
