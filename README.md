@@ -25,6 +25,7 @@ Because of the orphan rule, if you want to implement [`FixedTypeId`] for types i
 The example usage:
 
 ```rust
+# #![cfg_attr(feature = "specialization", feature(specialization))]
 use fixed_type_id::{FixedTypeId, FixedId, fixed_type_id, name_version_to_hash};
 use std::hash::Hasher;
 
@@ -61,6 +62,7 @@ assert_eq!(<A as FixedTypeId>::TYPE_NAME, "A");
 If you want to define for your generic struct, you can use [`implement_wrapper_fixed_type_id`]:
 
 ```rust
+# #![cfg_attr(feature = "specialization", feature(specialization))]
 use fixed_type_id::{FixedTypeId, FixedId, ConstTypeName, fstr_to_str, FixedVersion, implement_wrapper_fixed_type_id};
 use std::ops::Add;
 
@@ -80,6 +82,7 @@ assert_eq!(<MyStruct<u8> as FixedTypeId>::TYPE_NAME, "SomeSpecialModule::MyStruc
 Also, you can define this trait yoursellf:
 
 ```rust
+# #![cfg_attr(feature = "specialization", feature(specialization))]
 use fixed_type_id::{FixedTypeId, FixedId, FixedVersion};
 use rapidhash::rapidhash;
 
@@ -97,7 +100,42 @@ assert_eq!(<MyType as FixedTypeId>::TYPE_ID.0, rapidhash::rapidhash("MyType".as_
 assert_eq!(<MyType as FixedTypeId>::TYPE_VERSION, (0,0,0).into());
 ```
 
+There are standalone functions to get the type_name, type_id and type_version, like [`std::any::type_name`], [`std::any::type_id`]:
+
+```rust
+# #![cfg_attr(feature = "specialization", feature(specialization))]
+use fixed_type_id::{type_name, type_id, type_version};
+use fixed_type_id::{FixedTypeId, FixedId, FixedVersion};
+
+struct MyType;
+
+impl FixedTypeId for MyType {
+    const TYPE_NAME: &'static str = "MyType";
+    // make this type id hash without version
+    const TYPE_ID: FixedId = FixedId::from_type_name(Self::TYPE_NAME, None);
+    const TYPE_VERSION: FixedVersion = FixedVersion::new(0, 0, 0);
+}
+
+assert_eq!(type_name::<MyType>(), "MyType");
+assert_eq!(type_id::<MyType>(), FixedId::from_type_name("MyType", None));
+assert_eq!(type_version::<MyType>(), (0,0,0).into());
+```
+
 ### Notes
+
+#### Specialization
+
+You can enable specialization by feature flag `specialization`, default is disabled. When enabled, it will implement [`FixedTypeId`] for all types, with dummy type info, not only the types you defined. Make it more like [`std::any::type_name`], [`std::any::type_id`].
+
+Currently, the dummy type info is:
+
+```plaintext
+type_name: "NOT_IMPLEMENTED"
+type_id: FixedId::from_type_name("NOT_IMPLEMENTED", Some(FixedVersion::new(0,0,0)))
+type_version: FixedVersion::new(0,0,0)
+```
+
+When you are working with extern crates's generic functions, these dummy type info may be useful.
 
 #### Version
 
