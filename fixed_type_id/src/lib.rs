@@ -4,6 +4,7 @@
 #![feature(str_from_raw_parts)]
 #![feature(generic_const_exprs)]
 #![feature(nonzero_internals)]
+#![cfg_attr(feature = "specialization", feature(specialization))]
 #![doc = include_str!("../README.md")]
 
 mod remote_impl;
@@ -31,7 +32,10 @@ pub const CONST_TYPENAME_LEN: usize = 256;
 /// A strong type for type id.
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct FixedId(pub u64);
@@ -212,7 +216,10 @@ pub trait FixedTypeId {
 
 /// A semver for a type, but without pre release, build meta etc.
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FixedVersion {
@@ -311,6 +318,7 @@ pub fn name_version_to_hash(name: &str, version: &FixedVersion) -> u64 {
 /// ## Example
 ///
 /// ```rust
+/// # #![cfg_attr(feature = "specialization", feature(specialization))]
 /// use fixed_type_id::{ConstTypeName, FixedTypeId, fstr_to_str};
 /// pub struct A<T> {
 ///     pub t: T,
@@ -437,6 +445,55 @@ pub const fn slice_to_fstr<const N: usize>(slice: &[&str]) -> fixedstr_ext::fstr
     fixedstr_ext::fstr::<N>::const_create_from_str_slice(slice)
 }
 
+/// A struct that contains a version and a data.
+///
+/// Meant to be used by serialization and deserialization.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[derive(Debug, Clone, Copy)]
+pub enum FixedVersioned<T> {
+    /// A type which's version is (0,0,0)
+    Plain(T),
+    /// A type which's version is not (0,0,0)
+    Versioned(FixedVersion, T),
+}
+
+impl<T: FixedTypeId> From<T> for FixedVersioned<T> {
+    #[inline(always)]
+    fn from(data: T) -> Self {
+        if type_version::<T>() == FixedVersion::new(0, 0, 0) {
+            FixedVersioned::Plain(data)
+        } else {
+            FixedVersioned::Versioned(type_version::<T>(), data)
+        }
+    }
+}
+
+#[cfg(feature = "specialization")]
+impl<T> FixedTypeId for T {
+    default const TYPE_NAME: &'static str = "NOT_IMPLEMENTED";
+
+    default const TYPE_ID: FixedId =
+        FixedId::from_type_name(Self::TYPE_NAME, Some(Self::TYPE_VERSION));
+
+    default const TYPE_VERSION: FixedVersion = FixedVersion::new(0, 0, 0);
+
+    default fn ty_name(&self) -> &'static str {
+        Self::TYPE_NAME
+    }
+
+    default fn ty_id(&self) -> FixedId {
+        Self::TYPE_ID
+    }
+
+    default fn ty_version(&self) -> FixedVersion {
+        Self::TYPE_VERSION
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -521,5 +578,20 @@ mod tests {
             <b::A as FixedTypeId>::TYPE_NAME,
             <a::A as FixedTypeId>::TYPE_NAME
         );
+    }
+
+    #[test]
+    fn specialization_for_any_type() {
+        pub struct A {
+            pub _t: u8,
+            pub _x: i32,
+        };
+
+        assert_eq!(<A as FixedTypeId>::TYPE_NAME, "NOT_IMPLEMENTED");
+        assert_eq!(
+            <A as FixedTypeId>::TYPE_ID,
+            FixedId::from_type_name("NOT_IMPLEMENTED", Some((0, 0, 0).into()))
+        );
+        assert_eq!(<A as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
     }
 }
