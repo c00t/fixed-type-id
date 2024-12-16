@@ -282,6 +282,12 @@ impl From<(u64, u64, u64)> for FixedVersion {
     }
 }
 
+impl From<FixedVersion> for (u64, u64, u64) {
+    fn from(value: FixedVersion) -> Self {
+        (value.major, value.minor, value.patch)
+    }
+}
+
 impl From<Version> for FixedVersion {
     fn from(value: Version) -> Self {
         FixedVersion::new(value.major, value.minor, value.patch)
@@ -453,23 +459,134 @@ pub const fn slice_to_fstr<const N: usize>(slice: &[&str]) -> fixedstr_ext::fstr
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
+#[cfg_attr(feature = "serde", serde(untagged))]
 #[derive(Debug, Clone, Copy)]
 pub enum FixedVersioned<T> {
     /// A type which's version is (0,0,0)
-    Plain(T),
+    N(T),
     /// A type which's version is not (0,0,0)
-    Versioned(FixedVersion, T),
+    V(FixedVersion, T),
 }
 
 impl<T: FixedTypeId> From<T> for FixedVersioned<T> {
     #[inline(always)]
     fn from(data: T) -> Self {
         if type_version::<T>() == FixedVersion::new(0, 0, 0) {
-            FixedVersioned::Plain(data)
+            FixedVersioned::N(data)
         } else {
-            FixedVersioned::Versioned(type_version::<T>(), data)
+            FixedVersioned::V(type_version::<T>(), data)
         }
     }
+}
+
+/// A helper function to serialize a versioned type using serde.
+///
+/// ```rust
+/// # #![cfg_attr(feature = "specialization", feature(specialization))]
+/// # mod m {
+/// use serde::{Serialize, Deserialize};
+/// use fixed_type_id::versioned_serde_helper;
+/// use fixed_type_id::{fixed_type_id, FixedTypeId, FixedId, FixedVersion};
+///
+/// #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+/// pub struct A {
+///     #[serde(serialize_with = "versioned_serde_helper")]
+///     pub a: B,
+///     #[serde(serialize_with = "versioned_serde_helper")]
+///     pub b: u8,
+///     #[serde(serialize_with = "versioned_serde_helper")]
+///     pub c: u16,
+/// }
+///
+/// #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+/// pub struct B;
+///
+/// fixed_type_id! {
+///     #[FixedTypeIdVersion((0,1,0))]
+///     B;
+/// }
+/// # }
+/// # use m::*;
+/// let a = A { a: B, b: 1, c: 2 };
+///
+/// let serialized = serde_json::to_string(&a).unwrap();
+/// assert_eq!(serialized, r#"{"a":[{"major":0,"minor":1,"patch":0},null],"b":1,"c":2}"#);
+///
+/// ```
+#[cfg(feature = "serde")]
+pub fn versioned_serde_helper<
+    S: ::serde::Serializer,
+    T: FixedTypeId + ::serde::Serialize + Clone,
+>(
+    value: &T,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use ::serde::Serialize;
+    FixedVersioned::from(value.clone()).serialize(serializer)
+}
+
+/// A helper function to deserialize a versioned type using serde.
+///
+/// ```rust
+/// # #![cfg_attr(feature = "specialization", feature(specialization))]
+/// # mod m {
+/// use serde::{Serialize, Deserialize};
+/// use fixed_type_id::{
+///     versioned_deserde_helper,
+///     versioned_serde_helper,
+/// };
+/// use fixed_type_id::{fixed_type_id, FixedTypeId, FixedId, FixedVersion};
+///
+/// #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+/// pub struct A {
+///     #[serde(
+///         deserialize_with = "versioned_deserde_helper",
+///         serialize_with = "versioned_serde_helper",
+///     )]
+///     pub a: B,
+///     #[serde(
+///         deserialize_with = "versioned_deserde_helper",
+///         serialize_with = "versioned_serde_helper",
+///     )]
+///     pub b: u8,
+///     #[serde(
+///         deserialize_with = "versioned_deserde_helper",
+///         serialize_with = "versioned_serde_helper",
+///     )]
+///     pub c: u16,
+/// }
+///
+/// #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+/// pub struct B;
+///
+/// fixed_type_id! {
+///     #[FixedTypeIdVersion((0,1,0))]
+///     B;
+/// }
+/// # }
+/// # use m::*;
+/// let a = A { a: B, b: 1, c: 2 };
+///
+/// let serialized = serde_json::to_string(&a).unwrap();
+/// assert_eq!(serialized, r#"{"a":[{"major":0,"minor":1,"patch":0},null],"b":1,"c":2}"#);
+///
+/// let deserialized: A = serde_json::from_str(&serialized).unwrap();
+/// assert_eq!(deserialized, a);
+/// ```
+#[cfg(feature = "serde")]
+pub fn versioned_deserde_helper<
+    'de,
+    D: ::serde::Deserializer<'de>,
+    T: FixedTypeId + ::serde::Deserialize<'de>,
+>(
+    deserializer: D,
+) -> Result<T, D::Error> {
+    let value: FixedVersioned<T> = ::serde::Deserialize::deserialize(deserializer)?;
+    let value = match value {
+        FixedVersioned::N(value) => value,
+        FixedVersioned::V(_, value) => value,
+    };
+    Ok(value)
 }
 
 #[cfg(feature = "specialization")]
