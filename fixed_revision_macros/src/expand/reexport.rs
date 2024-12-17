@@ -80,6 +80,8 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
         });
         if self.with_revision_suffix {
             let current = self.current as u16;
+            let enum_ident = syn::Ident::new(&format!("{}", i.name), i.name.span());
+            let enum_var_ident = syn::Ident::new(&format!("V{}", current), i.name.span());
             let alias_enum_name = format!("{}", i.name);
             let fixed_id_name = match &self.fixed_id_prefix {
                 None => syn::Path::from(name.clone()),
@@ -100,6 +102,21 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                     #[FixedTypeIdVersion((#current,0,0))]
                     #[FixedTypeIdEqualTo(#alias_enum_name)]
                     #fixed_id_name
+                }
+
+                impl From<#name> for #enum_ident {
+                    fn from(value: #name) -> Self {
+                        #enum_ident::#enum_var_ident(value)
+                    }
+                }
+
+                impl From<#enum_ident> for #name {
+                    fn from(value: #enum_ident) -> Self {
+                        match value {
+                            #enum_ident::#enum_var_ident(v) => v,
+                            _ => panic!("Invalid enum variant"),
+                        }
+                    }
                 }
             });
             self.enum_stream.as_mut().map(|stream| {
@@ -129,6 +146,8 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
 
         if self.with_revision_suffix {
             let current = self.current as u16;
+            let enum_ident = syn::Ident::new(&format!("{}", i.name), i.name.span());
+            let enum_var_ident = syn::Ident::new(&format!("V{}", current), i.name.span());
             let alias_enum_name = format!("{}", i.name);
             let fixed_id_name = match &self.fixed_id_prefix {
                 None => syn::Path::from(name.clone()),
@@ -149,6 +168,21 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                     #[FixedTypeIdVersion((#current,0,0))]
                     #[FixedTypeIdEqualTo(#alias_enum_name)]
                     #fixed_id_name
+                }
+
+                impl From<#name> for #enum_ident {
+                    fn from(value: #name) -> Self {
+                        #enum_ident::#enum_var_ident(value)
+                    }
+                }
+
+                impl From<#enum_ident> for #name {
+                    fn from(value: #enum_ident) -> Self {
+                        match value {
+                            #enum_ident::#enum_var_ident(v) => v,
+                            _ => panic!("Invalid enum variant"),
+                        }
+                    }
                 }
             });
             self.enum_stream.as_mut().map(|stream| {

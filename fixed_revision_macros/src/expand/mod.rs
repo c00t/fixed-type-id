@@ -262,12 +262,13 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         #enum_alias
 
         self::fixed_type_id_without_version_hash! {
-            #[FixedTypeIdVersion((0,0,0))]
+            #[FixedTypeIdVersion((#revision,0,0))]
             #fixed_id_name
         }
 
         self::fixed_type_id_without_version_hash! {
-            #[FixedTypeIdVersion((0,0,0))]
+            // it's always the current revision
+            #[FixedTypeIdVersion((#revision,0,0))]
             #[FixedTypeIdEqualTo(#name)]
             #fixed_id_def_name
         }
