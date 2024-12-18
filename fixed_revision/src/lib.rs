@@ -1,4 +1,8 @@
-use fixed_type_id::{type_id, FixedId, FixedTypeId, FixedVersion};
+use core::fmt;
+
+use fixed_type_id::{
+    type_id, ArchivedFixedId, ArchivedFixedVersion, FixedId, FixedTypeId, FixedVersion,
+};
 
 /// A struct that wraps a type id and a data.
 ///
@@ -16,9 +20,13 @@ use fixed_type_id::{type_id, FixedId, FixedTypeId, FixedVersion};
 #[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
 #[derive(Debug, Clone, Copy)]
 pub struct FixedTypeIdTagged<T: FixedTypeId> {
-    /// The id of the type.
+    /// The [`FixedId`] type id of the type.
     pub type_id: FixedId,
     /// The data of the type.
+    ///
+    /// For [`rkyv`], this field is annotated with `#[rkyv(with = rkyv::with::AsBox)]`, because without it,
+    /// [`FixedTypeIdTagged`] has different layout in memory than the [`FixedTypeIdTag`].
+    #[cfg_attr(feature = "rkyv", rkyv(with = rkyv::with::AsBox))]
     pub data: T,
 }
 
@@ -43,9 +51,12 @@ impl<T: FixedTypeId> From<T> for FixedTypeIdTagged<T> {
 #[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
 #[derive(Debug, Clone, Copy)]
 pub struct FixedTypeIdTag {
-    /// The typeid of the deserialized type.
+    /// The [`FixedId`] typeid of the deserialized type.
     pub type_id: FixedId,
     /// The version of the deserialized data.
+    ///
+    /// for rkyv, the `with = Box<GeneralVersion>` must be specified, because the `data` will have different layout in [`FixedTypeIdTagged`].
+    #[cfg_attr(feature = "rkyv", rkyv(with = Box<GeneralVersion>))]
     data: FixedVersionTag,
 }
 
@@ -53,6 +64,12 @@ impl FixedTypeIdTag {
     /// Get the [`FixedId`] type id and [`FixedVersion`] version of the underlying data.
     pub fn get_identifier(&self) -> (FixedId, FixedVersion) {
         (self.type_id, self.data.version.into())
+    }
+}
+
+impl ArchivedFixedTypeIdTag {
+    pub fn get_identifier(&self) -> (FixedId, FixedVersion) {
+        ((&self.type_id).into(), self.data.get().into())
     }
 }
 
@@ -79,6 +96,8 @@ struct FixedVersionTag {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
 #[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
+#[cfg_attr(feature = "rkyv", rkyv(compare(PartialEq), derive(Debug, Copy, Clone)))]
+#[cfg_attr(not(any(feature = "rkyv", feature = "serde")), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
 enum GeneralVersion {
@@ -219,3 +238,62 @@ impl From<GeneralVersion> for FixedVersion {
         FixedVersion::new(value as u64, 0, 0)
     }
 }
+
+#[cfg(feature = "rkyv")]
+impl From<&ArchivedGeneralVersion> for FixedVersion {
+    #[inline(always)]
+    fn from(value: &ArchivedGeneralVersion) -> Self {
+        FixedVersion::new(*value as u64, 0, 0)
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl ::rkyv::with::ArchiveWith<FixedVersionTag> for Box<GeneralVersion> {
+    type Archived = rkyv::Archived<Box<GeneralVersion>>;
+
+    type Resolver = rkyv::boxed::BoxResolver;
+
+    fn resolve_with(
+        field: &FixedVersionTag,
+        resolver: Self::Resolver,
+        out: rkyv::Place<Self::Archived>,
+    ) {
+        rkyv::boxed::ArchivedBox::resolve_from_ref(&field.version, resolver, out)
+    }
+}
+
+#[derive(Debug)]
+pub struct TypeIdMismatchError {
+    pub deser_id: FixedId,
+    pub expect_id: FixedId,
+}
+
+impl fmt::Display for TypeIdMismatchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "type id mismatch, deser_id:{}, expect_id:{}",
+            self.deser_id, self.expect_id
+        )
+    }
+}
+
+impl core::error::Error for TypeIdMismatchError {}
+
+#[derive(Debug)]
+pub struct VersionTooNewError {
+    pub deser_ver: u64,
+    pub current_max_ver: u64,
+}
+
+impl fmt::Display for VersionTooNewError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "version too new, current_max:{}, deser_ver:{}",
+            self.current_max_ver, self.deser_ver
+        )
+    }
+}
+
+impl core::error::Error for VersionTooNewError {}

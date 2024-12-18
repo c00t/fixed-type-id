@@ -1,17 +1,22 @@
 use std::num::Wrapping;
 
-use fixed_revision::{FixedTypeIdTag, FixedTypeIdTagged};
+use fixed_revision::{
+    ArchivedFixedTypeIdTag, ArchivedFixedTypeIdTagged, FixedTypeIdTag, FixedTypeIdTagged,
+    TypeIdMismatchError, VersionTooNewError,
+};
 use fixed_revision_macros::revisioned;
 use fixed_type_id::{
     fixed_type_id_without_version_hash, type_id, type_name, type_version, FixedId, FixedTypeId,
     FixedVersion,
 };
+use rkyv::{Deserialize, DeserializeUnsized};
 use serde::{de::DeserializeSeed, Deserializer};
 
 #[revisioned(
     revision = 3,
     fixed_id_prefix = "fixed_revision_macros::tests",
-    serde_support
+    serde_support,
+    rkyv_support
 )]
 #[derive(Debug, PartialEq, Clone)]
 pub enum TestEnum {
@@ -131,40 +136,70 @@ pub struct Tester4 {
 #[test]
 fn test_basic_gen() {
     assert_eq!(type_id::<TestEnum_1>(), TestEnum::TYPE_ID);
-    assert_eq!(type_version::<TestEnum_1>(), (1, 0, 0).into());
+    assert_eq!(
+        type_version::<TestEnum_1>(),
+        Into::<FixedVersion>::into((1, 0, 0))
+    );
     assert_eq!(
         type_name::<TestEnum_1>(),
         "fixed_revision_macros::tests::TestEnum_1"
     );
 
     assert_eq!(type_id::<TestEnum_2>(), TestEnum::TYPE_ID);
-    assert_eq!(type_version::<TestEnum_2>(), (2, 0, 0).into());
+    assert_eq!(
+        type_version::<TestEnum_2>(),
+        Into::<FixedVersion>::into((2, 0, 0))
+    );
     assert_eq!(
         type_name::<TestEnum_2>(),
         "fixed_revision_macros::tests::TestEnum_2"
     );
 
-    assert_eq!(type_version::<TestEnum_3>(), (3, 0, 0).into());
+    assert_eq!(
+        type_version::<TestEnum_3>(),
+        Into::<FixedVersion>::into((3, 0, 0))
+    );
     assert_eq!(type_id::<TestEnum_3>(), TestEnum::TYPE_ID);
     assert_eq!(
         type_name::<TestEnum_3>(),
         "fixed_revision_macros::tests::TestEnum_3"
     );
 
-    assert_eq!(type_version::<TestEnum>(), (3, 0, 0).into());
+    assert_eq!(
+        type_version::<TestEnum>(),
+        Into::<FixedVersion>::into((3, 0, 0))
+    );
     assert_eq!(type_id::<TestEnum>(), TestEnum::TYPE_ID);
     assert_eq!(
         type_name::<TestEnum>(),
         "fixed_revision_macros::tests::TestEnum"
     );
 
-    assert_eq!(type_version::<TestUnit>(), (1, 0, 0).into());
-    assert_eq!(type_version::<TestTuple2>(), (2, 0, 0).into());
-    assert_eq!(type_version::<Tester4>(), (4, 0, 0).into());
+    assert_eq!(
+        type_version::<TestUnit>(),
+        Into::<FixedVersion>::into((1, 0, 0))
+    );
+    assert_eq!(
+        type_version::<TestTuple2>(),
+        Into::<FixedVersion>::into((2, 0, 0))
+    );
+    assert_eq!(
+        type_version::<Tester4>(),
+        Into::<FixedVersion>::into((4, 0, 0))
+    );
 
     let test_enum = TestEnum::V3(TestEnum_3::Zero);
     let test_enum_str =
         ron::ser::to_string_pretty(&test_enum, ron::ser::PrettyConfig::default()).unwrap();
+    use rkyv::{from_bytes, rancor::Error, to_bytes, Archive, Deserialize, Serialize};
+    let test_enum_rkyv_aligned_vec = rkyv::to_bytes::<Error>(
+        &Into::<FixedTypeIdTagged<TestEnum>>::into(test_enum.clone()),
+    )
+    .unwrap();
+    let test_enum_archived = TestEnum::access_rkyv(&test_enum_rkyv_aligned_vec).unwrap();
+    let test_enum_deser = TestEnum::deserialize_rkyv(&test_enum_rkyv_aligned_vec).unwrap();
+    assert_eq!(test_enum_deser, test_enum);
+
     eprintln!("{test_enum_str}");
     let test_enum_deser =
         TestEnum::deserialize_serde(|| ron::de::Deserializer::from_str(&test_enum_str).unwrap())

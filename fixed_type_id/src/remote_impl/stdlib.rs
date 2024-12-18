@@ -258,19 +258,19 @@ mod tests {
         );
         assert_eq!(
             <Vec<(String, u32)> as FixedTypeId>::TYPE_VERSION,
-            (0, 0, 0).into()
+            FixedVersion::new(0, 0, 0)
         );
         assert_eq!(
             <PhantomData<i32> as FixedTypeId>::TYPE_VERSION,
-            (0, 0, 0).into()
+            FixedVersion::new(0, 0, 0)
         );
         assert_eq!(
             <((), String) as FixedTypeId>::TYPE_VERSION,
-            (0, 0, 0).into()
+            FixedVersion::new(0, 0, 0)
         );
         assert_eq!(
             <std::time::Duration as FixedTypeId>::TYPE_VERSION,
-            (0, 0, 0).into()
+            FixedVersion::new(0, 0, 0)
         );
         assert_ne!(
             <Vec<u8> as FixedTypeId>::TYPE_ID,
@@ -312,11 +312,11 @@ mod tests {
         );
         assert_eq!(
             <HashMap<String, u32> as FixedTypeId>::TYPE_VERSION,
-            (0, 0, 0).into()
+            FixedVersion::new(0, 0, 0)
         );
         assert_eq!(
             <Option<Box<Vec<String>>> as FixedTypeId>::TYPE_VERSION,
-            (0, 0, 0).into()
+            FixedVersion::new(0, 0, 0)
         );
     }
 }

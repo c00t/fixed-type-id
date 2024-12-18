@@ -37,8 +37,16 @@ pub const CONST_TYPENAME_LEN: usize = 256;
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
 #[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
+#[cfg_attr(feature = "rkyv", rkyv(compare(PartialEq), derive(Debug)))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct FixedId(pub u64);
+
+#[cfg(feature = "rkyv")]
+impl From<&ArchivedFixedId> for FixedId {
+    fn from(value: &ArchivedFixedId) -> Self {
+        FixedId(value.0.into())
+    }
+}
 
 /// Just write internal [`u64`] with [`std::hash::Hasher::write_u64`].
 impl Hash for FixedId {
@@ -221,6 +229,7 @@ pub trait FixedTypeId {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
 #[cfg_attr(feature = "rkyv", rkyv(attr(allow(missing_docs))))]
+#[cfg_attr(feature = "rkyv", rkyv(compare(PartialEq), derive(Debug)))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FixedVersion {
     /// The major version number.
@@ -494,8 +503,14 @@ mod tests {
         assert_eq!(<A1 as FixedTypeId>::TYPE_NAME, "A1");
         assert_eq!(<A2 as FixedTypeId>::TYPE_NAME, "A2");
         assert_eq!(<A1 as FixedTypeId>::TYPE_ID, <A2 as FixedTypeId>::TYPE_ID);
-        assert_eq!(<A1 as FixedTypeId>::TYPE_VERSION, (0, 1, 0).into());
-        assert_eq!(<A2 as FixedTypeId>::TYPE_VERSION, (0, 2, 0).into());
+        assert_eq!(
+            <A1 as FixedTypeId>::TYPE_VERSION,
+            FixedVersion::new(0, 1, 0)
+        );
+        assert_eq!(
+            <A2 as FixedTypeId>::TYPE_VERSION,
+            FixedVersion::new(0, 2, 0)
+        );
     }
 
     #[test]
@@ -517,8 +532,14 @@ mod tests {
             <A<u8> as FixedTypeId>::TYPE_VERSION,
             <A<u16> as FixedTypeId>::TYPE_VERSION
         );
-        assert_eq!(<A<u8> as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
-        assert_eq!(<A<u16> as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
+        assert_eq!(
+            <A<u8> as FixedTypeId>::TYPE_VERSION,
+            FixedVersion::new(0, 0, 0)
+        );
+        assert_eq!(
+            <A<u16> as FixedTypeId>::TYPE_VERSION,
+            FixedVersion::new(0, 0, 0)
+        );
     }
 
     #[test]
@@ -547,7 +568,10 @@ mod tests {
             <b::A as FixedTypeId>::TYPE_ID.0,
             <a::A as FixedTypeId>::TYPE_ID.0
         );
-        assert_eq!(<a::A as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
+        assert_eq!(
+            <a::A as FixedTypeId>::TYPE_VERSION,
+            FixedVersion::new(0, 0, 0)
+        );
         assert_eq!(
             <b::A as FixedTypeId>::TYPE_VERSION,
             <a::A as FixedTypeId>::TYPE_VERSION

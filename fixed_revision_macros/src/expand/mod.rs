@@ -257,6 +257,59 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         quote! {}
     };
 
+    let enum_alias_rkyv_impl = if rkyv_support {
+        quote! {
+            impl #name {
+                pub fn access_rkyv(data: &[u8]) -> ::core::result::Result<&::rkyv::Archived<Self>, ::rkyv::rancor::Error> {
+                    let tag = ::rkyv::access::<self::ArchivedFixedTypeIdTag, _>(data)?;
+                    let (deser_id, ver) = tag.get_identifier();
+                    let deser_ver = ver.major;
+                    let expect_id = self::type_id::<Self>();
+                    if deser_id != expect_id {
+                        ::rkyv::rancor::fail!(self::TypeIdMismatchError {
+                            deser_id,
+                            expect_id
+                        });
+                    }
+                    let current_max_ver = self::type_version::<Self>().major;
+                    if current_max_ver < deser_ver {
+                        ::rkyv::rancor::fail!(self::VersionTooNewError {
+                            current_max_ver,
+                            deser_ver
+                        });
+                    }
+                    let archived_tagged = ::rkyv::access::<self::ArchivedFixedTypeIdTagged<Self>, _>(data)?;
+                    Ok(archived_tagged.data.get())
+                }
+
+                pub fn deserialize_rkyv(data: &[u8]) -> ::core::result::Result<Self, ::rkyv::rancor::Error> {
+                    let tag = ::rkyv::access::<self::ArchivedFixedTypeIdTag, _>(data)?;
+                    let (deser_id, ver) = tag.get_identifier();
+                    let deser_ver = ver.major;
+                    let expect_id = self::type_id::<Self>();
+                    if deser_id != expect_id {
+                        ::rkyv::rancor::fail!(self::TypeIdMismatchError {
+                            deser_id,
+                            expect_id
+                        });
+                    }
+                    let current_max_ver = self::type_version::<Self>().major;
+                    if current_max_ver < deser_ver {
+                        ::rkyv::rancor::fail!(self::VersionTooNewError {
+                            current_max_ver,
+                            deser_ver
+                        });
+                    }
+                    let archived_tagged = ::rkyv::access::<self::ArchivedFixedTypeIdTagged<Self>, _>(data)?;
+                    let archived_enum = archived_tagged.data.get();
+                    ::rkyv::deserialize(archived_enum)
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     // Build the full path by combining prefix path (if any) with the type name
     let fixed_id_name = match &fixed_id_prefix {
         None => syn::Path::from(name.clone()),
@@ -294,6 +347,8 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         #enum_alias
 
         #enum_alias_serde_impl
+
+        #enum_alias_rkyv_impl
 
         self::fixed_type_id_without_version_hash! {
             #[FixedTypeIdVersion((#revision,0,0))]
