@@ -109,6 +109,7 @@ version = "0.1.0"
 dependencies = [
  "fixed-revision-macros",
  "fixed-type-id",
+ "rkyv",
  "ron",
  "serde",
  "serde-hjson",

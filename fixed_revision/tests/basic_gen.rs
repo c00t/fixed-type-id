@@ -1,10 +1,12 @@
 use std::num::Wrapping;
 
+use fixed_revision::{FixedTypeIdTag, FixedTypeIdTagged};
 use fixed_revision_macros::revisioned;
 use fixed_type_id::{
     fixed_type_id_without_version_hash, type_id, type_name, type_version, FixedId, FixedTypeId,
-    FixedTypeIdTag, FixedTypeIdTagged, FixedVersion,
+    FixedVersion,
 };
+use serde::{de::DeserializeSeed, Deserializer};
 
 #[revisioned(
     revision = 3,
@@ -36,8 +38,6 @@ pub enum TestEnum {
     Four(usize),
     Five(#[revision(end = 3)] u64, #[revision(start = 3)] i64),
 }
-
-impl TestEnum {}
 
 #[revisioned(
     revision = 1,
@@ -163,6 +163,31 @@ fn test_basic_gen() {
     assert_eq!(type_version::<Tester4>(), (4, 0, 0).into());
 
     let test_enum = TestEnum::V3(TestEnum_3::Zero);
+    let test_enum_str =
+        ron::ser::to_string_pretty(&test_enum, ron::ser::PrettyConfig::default()).unwrap();
+    eprintln!("{test_enum_str}");
+    let test_enum_deser =
+        TestEnum::deserialize_serde(|| ron::de::Deserializer::from_str(&test_enum_str).unwrap())
+            .unwrap();
+    assert_eq!(test_enum_deser, test_enum);
+    // test raw string, note that type_id is the same across all versions
+    let test_enum_str_edited = r#"
+(
+    type_id: (9386386583157998584),
+    data: (
+        version: V4,
+        content: Six,
+    ),
+)
+"#;
+    let test_enum_edited_deser = TestEnum::deserialize_serde(|| {
+        ron::de::Deserializer::from_str(&test_enum_str_edited).unwrap()
+    });
+    assert!(test_enum_edited_deser.is_err());
+    assert_eq!(
+        format!("{:?}", test_enum_edited_deser),
+        "Err(Message(\"version too new, current_max:3, de_ver:4\"))"
+    );
 
     let tester3_old = Tester3::V3(Tester3_3 {
         usize_1: 57918374,
@@ -234,23 +259,4 @@ fn test_basic_gen() {
     assert_eq!(test_struct_v3, test_struct_v3_new);
     eprintln!("{}", test_struct_v3_string);
     assert_eq!(version.major, Tester3::TYPE_VERSION.major);
-
-    panic!();
-    let test_struct_v4 = Tester4::V4(Tester4_4 {
-        usize_1: 57918374,
-        u16_1: 1223,
-        i8_1: 14,
-        i32_1: -234234,
-        f32_1: 1.0,
-        f64_1: 2.0,
-        char_1: 'x',
-        bool_1: true,
-        string_1: String::from("A test"),
-        enum_1: test_enum,
-        option_1: None,
-        unit_1: TestUnit::V1(TestUnit_1),
-        tuple_1: TestTuple2_1(vec![234324, 1234234]),
-        box_1: Box::new(String::from("A test")),
-        wrapping_1: Wrapping(1234),
-    });
 }

@@ -149,7 +149,9 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
 
         stream
     };
-    let enum_def_name = Ident::new(&format!("{}Def", name), name.span());
+    let enum_def_name_str = format!("{}Def", name);
+    let enum_def_name = Ident::new(&enum_def_name_str, name.span());
+    let enum_name_str = format!("{}", name);
     let enum_def_from_stream = {
         let mut stream = TokenStream::new();
         (1..=revision).for_each(|x| {
@@ -225,6 +227,36 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         }
     };
 
+    let enum_alias_serde_impl = if serde_support {
+        quote! {
+            impl #name {
+                pub fn deserialize_serde<'de, F, T, E>(de_fn: F) -> ::core::result::Result<Self, E>
+                where
+                    F: Fn() -> T,
+                    for<'a> &'a mut T: ::serde::de::Deserializer<'de, Error = E>,
+                    E: ::serde::de::Error,
+                {
+                    let mut de = de_fn();
+                    let tag = ::std::marker::PhantomData::<FixedTypeIdTag>.deserialize(&mut de)?;
+                    let (id, ver) = tag.get_identifier();
+                    let de_ver = ver.major;
+                    let expect_id = self::type_id::<Self>();
+                    if id != expect_id {
+                        return Err(::serde::de::Error::custom(format!("type id mismatch, de:{}, expect:{}", id, expect_id)));
+                    }
+                    let current_max_ver = self::type_version::<Self>().major;
+                    if current_max_ver < de_ver {
+                        return Err(::serde::de::Error::custom(format!("version too new, current_max:{}, de_ver:{}", current_max_ver, de_ver)));
+                    }
+                    let mut de = de_fn();
+                    ::serde::Deserialize::deserialize(&mut de)
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     // Build the full path by combining prefix path (if any) with the type name
     let fixed_id_name = match &fixed_id_prefix {
         None => syn::Path::from(name.clone()),
@@ -261,6 +293,8 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
 
         #enum_alias
 
+        #enum_alias_serde_impl
+
         self::fixed_type_id_without_version_hash! {
             #[FixedTypeIdVersion((#revision,0,0))]
             #fixed_id_name
@@ -269,7 +303,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         self::fixed_type_id_without_version_hash! {
             // it's always the current revision
             #[FixedTypeIdVersion((#revision,0,0))]
-            #[FixedTypeIdEqualTo(#name)]
+            #[FixedTypeIdEqualTo(#enum_name_str)]
             #fixed_id_def_name
         }
     })
