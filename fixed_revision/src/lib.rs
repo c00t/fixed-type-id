@@ -1,8 +1,6 @@
 use core::fmt;
 
-use fixed_type_id::{
-    type_id, ArchivedFixedId, ArchivedFixedVersion, FixedId, FixedTypeId, FixedVersion,
-};
+use fixed_type_id::{type_id, FixedId, FixedTypeId, FixedVersion};
 
 /// A struct that wraps a type id and a data.
 ///

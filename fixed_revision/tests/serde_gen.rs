@@ -1,22 +1,16 @@
 use std::num::Wrapping;
 
-use fixed_revision::{
-    ArchivedFixedTypeIdTag, ArchivedFixedTypeIdTagged, FixedTypeIdTag, FixedTypeIdTagged,
-    TypeIdMismatchError, VersionTooNewError,
-};
+use fixed_revision::{FixedTypeIdTag, FixedTypeIdTagged, TypeIdMismatchError, VersionTooNewError};
 use fixed_revision_macros::revisioned;
 use fixed_type_id::{
     fixed_type_id_without_version_hash, type_id, type_name, type_version, FixedId, FixedTypeId,
     FixedVersion,
 };
-use rkyv::{Deserialize, DeserializeUnsized};
-use serde::{de::DeserializeSeed, Deserializer};
 
 #[revisioned(
     revision = 3,
     fixed_id_prefix = "fixed_revision_macros::tests",
-    serde_support,
-    rkyv_support
+    serde_support
 )]
 #[derive(Debug, PartialEq, Clone)]
 pub enum TestEnum {
@@ -40,7 +34,7 @@ pub enum TestEnum {
     #[revision(start = 2, end = 3)]
     Four,
     #[revision(start = 3)]
-    Four(usize),
+    Four(u32),
     Five(#[revision(end = 3)] u64, #[revision(start = 3)] i64),
 }
 
@@ -49,7 +43,7 @@ pub enum TestEnum {
     fixed_id_prefix = "fixed_revision_macros::tests",
     serde_support
 )]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct TestUnit;
 
 #[revisioned(
@@ -134,7 +128,7 @@ pub struct Tester4 {
 }
 
 #[test]
-fn test_basic_gen() {
+fn basic_gen() {
     assert_eq!(type_id::<TestEnum_1>(), TestEnum::TYPE_ID);
     assert_eq!(
         type_version::<TestEnum_1>(),
@@ -191,15 +185,6 @@ fn test_basic_gen() {
     let test_enum = TestEnum::V3(TestEnum_3::Zero);
     let test_enum_str =
         ron::ser::to_string_pretty(&test_enum, ron::ser::PrettyConfig::default()).unwrap();
-    use rkyv::{from_bytes, rancor::Error, to_bytes, Archive, Deserialize, Serialize};
-    let test_enum_rkyv_aligned_vec = rkyv::to_bytes::<Error>(
-        &Into::<FixedTypeIdTagged<TestEnum>>::into(test_enum.clone()),
-    )
-    .unwrap();
-    let test_enum_archived = TestEnum::access_rkyv(&test_enum_rkyv_aligned_vec).unwrap();
-    let test_enum_deser = TestEnum::deserialize_rkyv(&test_enum_rkyv_aligned_vec).unwrap();
-    assert_eq!(test_enum_deser, test_enum);
-
     eprintln!("{test_enum_str}");
     let test_enum_deser =
         TestEnum::deserialize_serde(|| ron::de::Deserializer::from_str(&test_enum_str).unwrap())

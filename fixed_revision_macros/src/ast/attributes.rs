@@ -7,7 +7,7 @@ use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
-    token, Attribute, Error, LitBool, LitInt, LitStr, Path, Token,
+    token, Attribute, Error, LitInt, LitStr, Path, Token,
 };
 
 mod kw {

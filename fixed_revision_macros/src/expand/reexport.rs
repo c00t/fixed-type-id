@@ -1,8 +1,12 @@
+use std::collections::HashSet;
+
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{punctuated::Pair, token, Path, PathSegment};
+use syn::{punctuated::Pair, spanned::Spanned, token, Ident, Path, PathSegment};
 
 use crate::ast::{self, Fields, Visit};
+
+use super::common::{rkyv_compare_trait_fn, rkyv_derive_trait_fn};
 
 /// Visitor which reexports the item, recreating it with only the given fields.
 pub struct Reexport<'a> {
@@ -12,6 +16,7 @@ pub struct Reexport<'a> {
     pub with_revision_suffix: bool,
     pub stream: &'a mut TokenStream,
     pub enum_stream: Option<&'a mut TokenStream>,
+    pub specific_derives: &'a mut HashSet<&'static str>,
     pub serde_support: bool,
     pub rkyv_support: bool,
 }
@@ -20,18 +25,69 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
         self.stream.append_all(quote! {
             #[allow(non_camel_case_types)]
         });
+        // Note(cupofc0t): process specific derive macros `Debug, PartialEq, Copy, Clone`, it's useful when deal with rkyv.
         for attr in i.attrs.other.iter() {
+            // check derive attrs
+            if attr.path().is_ident("derive") {
+                match &attr.meta {
+                    syn::Meta::List(meta_list) => {
+                        let _ = meta_list.parse_nested_meta(|meta| {
+                            if meta.path.is_ident("Copy") {
+                                self.specific_derives.insert("Copy");
+                            }
+                            if meta.path.is_ident("Clone") {
+                                self.specific_derives.insert("Clone");
+                            }
+                            if meta.path.is_ident("PartialEq") {
+                                self.specific_derives.insert("PartialEq");
+                            }
+                            if meta.path.is_ident("Debug") {
+                                self.specific_derives.insert("Debug");
+                            }
+                            if meta.path.is_ident("PartialOrd") {
+                                self.specific_derives.insert("PartialOrd");
+                            }
+                            Ok(())
+                        });
+                    }
+                    _ => {}
+                }
+            }
             attr.to_tokens(self.stream);
-            if self.serde_support {
-                self.stream.append_all(quote! {
-                    #[derive(::serde::Serialize, ::serde::Deserialize)]
-                });
-            }
-            if self.rkyv_support {
-                self.stream.append_all(quote! {
-                    #[derive(::rkyv::Archive, ::rkyv::Serialize, ::rkyv::Deserialize)]
-                });
-            }
+        }
+        if self.serde_support {
+            self.stream.append_all(quote! {
+                #[derive(::serde::Serialize, ::serde::Deserialize)]
+            });
+        }
+        if self.rkyv_support {
+            // when rkyv, add specific derives to archived types.
+            let compare_vec: Vec<_> = self
+                .specific_derives
+                .iter()
+                .filter_map(|&s| {
+                    if rkyv_compare_trait_fn(s) {
+                        Some(Ident::new(s, i.span()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let filterd_out_vec: Vec<_> = self
+                .specific_derives
+                .iter()
+                .filter_map(|&s| {
+                    if rkyv_derive_trait_fn(s) {
+                        Some(Ident::new(s, i.span()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            self.stream.append_all(quote! {
+                #[derive(::rkyv::Archive, ::rkyv::Serialize, ::rkyv::Deserialize)]
+                #[rkyv(compare(#(#compare_vec,)*), derive(#(#filterd_out_vec,)*))]
+            });
         }
         i.vis.to_tokens(self.stream);
         ast::visit_item(self, i)
@@ -59,6 +115,7 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                 fixed_id_prefix: None,
                 stream,
                 enum_stream: None,
+                specific_derives: self.specific_derives,
                 serde_support: self.serde_support,
                 rkyv_support: self.rkyv_support,
             };
@@ -224,6 +281,7 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                         fixed_id_prefix: None,
                         stream,
                         enum_stream: None,
+                        specific_derives: self.specific_derives,
                         serde_support: self.serde_support,
                         rkyv_support: self.rkyv_support,
                     };
@@ -254,6 +312,7 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                         fixed_id_prefix: None,
                         stream,
                         enum_stream: None,
+                        specific_derives: self.specific_derives,
                         serde_support: self.serde_support,
                         rkyv_support: self.rkyv_support,
                     };

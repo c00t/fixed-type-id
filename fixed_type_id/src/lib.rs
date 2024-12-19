@@ -10,7 +10,7 @@
 mod remote_impl;
 
 use core::fmt;
-use std::{hash::Hash, marker::PhantomData};
+use std::hash::Hash;
 
 pub use fixed_type_id_macros::{
     fixed_type_id, fixed_type_id_without_version_hash, random_fixed_type_id,

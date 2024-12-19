@@ -5,8 +5,9 @@ mod ser;
 mod validate_version;
 
 use core::panic;
-use std::u16;
+use std::{collections::HashSet, u16};
 
+use common::{rkyv_compare_trait_fn, rkyv_derive_trait_fn};
 use de::{DeserializeVisitor, EnumStructsVisitor};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
@@ -22,7 +23,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
     let ast: ast::Item = syn::parse2(input)?;
 
     // Note(cupofc0t): I don't want to modify the revision type to (u64,u64,u64) or semver here,
-    //   just convert it to distinct semver version, `(0,x++,0)` or `(x++,0,0)` to make it compatible with fixed_type_id.
+    //   just convert it to distinct semver version, `(0,x++,0)` or `(x++,0,0)`(current) to make it compatible with fixed_type_id.
     let revision = match (ast.attrs.options.revision, attrs.0.revision) {
 		(Some(x), None) | (None, Some(x)) => {
 			x
@@ -77,6 +78,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
 
     let mut enum_stream = TokenStream::new();
 
+    let mut specific_derives = HashSet::new();
     // deserialize implementation
     let reexport_revisions = (1..=revision)
         .map(|x| {
@@ -88,6 +90,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                 fixed_id_prefix: fixed_id_prefix.clone(),
                 stream: &mut reexport,
                 enum_stream: Some(&mut enum_stream),
+                specific_derives: &mut specific_derives,
                 serde_support,
                 rkyv_support,
             }
@@ -120,8 +123,30 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         }
 
         if rkyv_support {
+            // when rkyv, add specific derives to archived types.
+            let compare_vec: Vec<_> = specific_derives
+                .iter()
+                .filter_map(|&s| {
+                    if rkyv_compare_trait_fn(s) {
+                        Some(Ident::new(s, name.span()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let filterd_out_vec: Vec<_> = specific_derives
+                .iter()
+                .filter_map(|&s| {
+                    if rkyv_derive_trait_fn(s) {
+                        Some(Ident::new(s, name.span()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
             stream.extend(quote! {
                 #[derive(::rkyv::Archive, ::rkyv::Serialize, ::rkyv::Deserialize)]
+                #[rkyv(compare(#(#compare_vec,)*), derive(#(#filterd_out_vec,)*))]
             });
         }
 
@@ -129,6 +154,8 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
     };
 
     let attr_def_stream = {
+        // if serde, we need def defs
+        // but rkyv don't need to derive in it
         let mut stream = TokenStream::new();
         for attr in ast.attrs.other.iter() {
             attr.to_tokens(&mut stream);
@@ -141,14 +168,11 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
             });
         }
 
-        if rkyv_support {
-            stream.extend(quote! {
-                #[derive(::rkyv::Archive, ::rkyv::Serialize, ::rkyv::Deserialize)]
-            });
-        }
+        if rkyv_support {}
 
         stream
     };
+
     let enum_def_name_str = format!("{}Def", name);
     let enum_def_name = Ident::new(&enum_def_name_str, name.span());
     let enum_name_str = format!("{}", name);
@@ -178,52 +202,66 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         });
         stream
     };
-    let enum_alias = quote! {
-        #attr_stream
-        #[repr(u16)]
-        #vis enum #name {
-            #enum_stream
-        }
 
-        #attr_def_stream
-        #[repr(u16)]
-        enum #enum_def_name {
-            #enum_stream
-        }
+    let enum_alias = match (serde_support, rkyv_support) {
+        (true, _) => quote! {
+            #attr_stream
+            #[repr(u16)]
+            #vis enum #name {
+                #enum_stream
+            }
 
-        impl From<#name> for #enum_def_name {
-            #[inline(always)]
-            fn from(val: #name) -> Self {
-                match val {
-                    #enum_def_to_stream
+            /// Only used by serde internals.
+            #attr_def_stream
+            #[repr(u16)]
+            enum #enum_def_name {
+                #enum_stream
+            }
+
+            impl From<#name> for #enum_def_name {
+                #[inline(always)]
+                fn from(val: #name) -> Self {
+                    match val {
+                        #enum_def_to_stream
+                    }
                 }
             }
-        }
 
-        impl From<#enum_def_name> for #name {
-            #[inline(always)]
-            fn from(val: #enum_def_name) -> Self {
-                match val {
-                    #enum_def_from_stream
+            impl From<#enum_def_name> for #name {
+                #[inline(always)]
+                fn from(val: #enum_def_name) -> Self {
+                    match val {
+                        #enum_def_from_stream
+                    }
                 }
             }
-        }
 
-        impl From<FixedTypeIdTagged<#enum_def_name>> for #name {
-            #[inline(always)]
-            fn from(val: FixedTypeIdTagged<#enum_def_name>) -> Self {
-                val.data.into()
-            }
-        }
-
-        impl From<#name> for FixedTypeIdTagged<#enum_def_name> {
-            #[inline(always)]
-            fn from(val: #name) -> Self {
-                FixedTypeIdTagged {
-                    data: val.into(),
-                    type_id: type_id::<#enum_def_name>(),
+            impl From<FixedTypeIdTagged<#enum_def_name>> for #name {
+                #[inline(always)]
+                fn from(val: FixedTypeIdTagged<#enum_def_name>) -> Self {
+                    val.data.into()
                 }
             }
+
+            impl From<#name> for FixedTypeIdTagged<#enum_def_name> {
+                #[inline(always)]
+                fn from(val: #name) -> Self {
+                    FixedTypeIdTagged {
+                        data: val.into(),
+                        type_id: type_id::<#enum_def_name>(),
+                    }
+                }
+            }
+        },
+        (false, _) => quote! {
+            #attr_stream
+            #[repr(u16)]
+            #vis enum #name {
+                #enum_stream
+            }
+        },
+        _ => {
+            todo!()
         }
     };
 
@@ -237,7 +275,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                     E: ::serde::de::Error,
                 {
                     let mut de = de_fn();
-                    let tag = ::std::marker::PhantomData::<FixedTypeIdTag>.deserialize(&mut de)?;
+                    let tag: FixedTypeIdTag = ::serde::Deserialize::deserialize(&mut de)?;
                     let (id, ver) = tag.get_identifier();
                     let de_ver = ver.major;
                     let expect_id = self::type_id::<Self>();
@@ -261,7 +299,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         quote! {
             impl #name {
                 pub fn access_rkyv(data: &[u8]) -> ::core::result::Result<&::rkyv::Archived<Self>, ::rkyv::rancor::Error> {
-                    let tag = ::rkyv::access::<self::ArchivedFixedTypeIdTag, _>(data)?;
+                    let tag = ::rkyv::access::<::rkyv::Archived<self::FixedTypeIdTag>, _>(data)?;
                     let (deser_id, ver) = tag.get_identifier();
                     let deser_ver = ver.major;
                     let expect_id = self::type_id::<Self>();
@@ -278,12 +316,12 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                             deser_ver
                         });
                     }
-                    let archived_tagged = ::rkyv::access::<self::ArchivedFixedTypeIdTagged<Self>, _>(data)?;
+                    let archived_tagged = ::rkyv::access::<::rkyv::Archived<self::FixedTypeIdTagged<Self>>, _>(data)?;
                     Ok(archived_tagged.data.get())
                 }
 
                 pub fn deserialize_rkyv(data: &[u8]) -> ::core::result::Result<Self, ::rkyv::rancor::Error> {
-                    let tag = ::rkyv::access::<self::ArchivedFixedTypeIdTag, _>(data)?;
+                    let tag = ::rkyv::access::<::rkyv::Archived<self::FixedTypeIdTag>, _>(data)?;
                     let (deser_id, ver) = tag.get_identifier();
                     let deser_ver = ver.major;
                     let expect_id = self::type_id::<Self>();
@@ -300,7 +338,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                             deser_ver
                         });
                     }
-                    let archived_tagged = ::rkyv::access::<self::ArchivedFixedTypeIdTagged<Self>, _>(data)?;
+                    let archived_tagged = ::rkyv::access::<::rkyv::Archived<self::FixedTypeIdTagged<Self>>, _>(data)?;
                     let archived_enum = archived_tagged.data.get();
                     ::rkyv::deserialize(archived_enum)
                 }
@@ -341,25 +379,42 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         }
     };
 
-    Ok(quote! {
-        #(#reexport_revisions)*
+    Ok(match (serde_support, rkyv_support) {
+        (true, _) => quote! {
+            #(#reexport_revisions)*
 
-        #enum_alias
+            #enum_alias
 
-        #enum_alias_serde_impl
+            #enum_alias_serde_impl
 
-        #enum_alias_rkyv_impl
+            #enum_alias_rkyv_impl
 
-        self::fixed_type_id_without_version_hash! {
-            #[FixedTypeIdVersion((#revision,0,0))]
-            #fixed_id_name
-        }
+            self::fixed_type_id_without_version_hash! {
+                #[FixedTypeIdVersion((#revision,0,0))]
+                #fixed_id_name
+            }
 
-        self::fixed_type_id_without_version_hash! {
-            // it's always the current revision
-            #[FixedTypeIdVersion((#revision,0,0))]
-            #[FixedTypeIdEqualTo(#enum_name_str)]
-            #fixed_id_def_name
-        }
+            self::fixed_type_id_without_version_hash! {
+                // it's always the current revision
+                #[FixedTypeIdVersion((#revision,0,0))]
+                #[FixedTypeIdEqualTo(#enum_name_str)]
+                #fixed_id_def_name
+            }
+        },
+        (false, _) => quote! {
+            #(#reexport_revisions)*
+
+            #enum_alias
+
+            #enum_alias_serde_impl
+
+            #enum_alias_rkyv_impl
+
+            self::fixed_type_id_without_version_hash! {
+                #[FixedTypeIdVersion((#revision,0,0))]
+                #fixed_id_name
+            }
+        },
+        _ => unimplemented!(),
     })
 }

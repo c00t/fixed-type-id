@@ -85,3 +85,11 @@ impl<'a, 'ast> Visit<'ast> for GatherOverrides<'a> {
         Ok(())
     }
 }
+
+pub fn rkyv_compare_trait_fn(s: &str) -> bool {
+    s == "PartialEq" || s == "PartialOrd"
+}
+
+pub fn rkyv_derive_trait_fn(s: &str) -> bool {
+    !(s == "PartialEq" || s == "PartialOrd" || s == "Clone" || s == "Copy")
+}
