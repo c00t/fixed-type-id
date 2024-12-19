@@ -594,8 +594,8 @@ mod tests {
         assert_eq!(<A as FixedTypeId>::TYPE_NAME, "NOT_IMPLEMENTED");
         assert_eq!(
             <A as FixedTypeId>::TYPE_ID,
-            FixedId::from_type_name("NOT_IMPLEMENTED", Some((0, 0, 0).into()))
+            FixedId::from_type_name("NOT_IMPLEMENTED", Some(FixedVersion::new(0, 0, 0)))
         );
-        assert_eq!(<A as FixedTypeId>::TYPE_VERSION, (0, 0, 0).into());
+        assert_eq!(<A as FixedTypeId>::TYPE_VERSION, FixedVersion::new(0, 0, 0));
     }
 }

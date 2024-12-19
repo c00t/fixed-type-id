@@ -145,7 +145,6 @@ dependencies = [
  "rkyv",
  "semver",
  "serde",
- "serde_json",
  "ultraviolet",
 ]
 
