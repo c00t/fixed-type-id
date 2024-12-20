@@ -5,8 +5,9 @@
 Make your types have a fixed type id and stable type name between different builds.
 
 The crate provides a trait and a procedural macro. By implementing [`FixedTypeId`],
-other crates can use [`FixedTypeId::ty_id()`], [`FixedTypeId::ty_name()`] and [`FixedTypeId::ty_version()`]
-to get the type id, name and version about this type
+other crates can use methods [`FixedTypeId::ty_id()`], [`FixedTypeId::ty_name()`] and [`FixedTypeId::ty_version()`] or 
+standalone functions [`fixed_type_id::type_id`], [`fixed_type_id::type_name`] and [`fixed_type_id::type_version`] 
+to get the type id, name and version about this type.
 
 It use [rapidhash](https://github.com/hoxxep/rapidhash) to hash the type name you provided, with/without version hashed into the id.
 Then provide the hash as a fixed id for your type. So you can construct exact the same id from the same type name and version.
