@@ -146,6 +146,7 @@ dependencies = [
  "semver",
  "serde",
  "ultraviolet",
+ "uuid",
 ]
 
 [[package]]

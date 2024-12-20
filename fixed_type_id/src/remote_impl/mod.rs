@@ -7,3 +7,5 @@ mod macaw;
 mod stdlib;
 #[cfg(feature = "ultraviolet")]
 mod ultraviolet;
+#[cfg(feature = "uuid-1")]
+mod uuid;
