@@ -1,8 +1,8 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{punctuated::Pair, spanned::Spanned, token, Ident, Path, PathSegment};
+use syn::{punctuated::Pair, spanned::Spanned, token, Generics, Ident, Path, PathSegment};
 
 use crate::ast::{self, Fields, Visit};
 
@@ -17,6 +17,7 @@ pub struct Reexport<'a> {
     pub stream: &'a mut TokenStream,
     pub enum_stream: Option<&'a mut TokenStream>,
     pub specific_derives: &'a mut HashSet<&'static str>,
+    pub generics: &'a mut HashMap<usize, Generics>,
     pub serde_support: bool,
     pub rkyv_support: bool,
 }
@@ -105,6 +106,7 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
             i.name.clone()
         };
         name.to_tokens(self.stream);
+        self.generics.insert(self.current, i.generics.clone());
         // i.name.to_tokens(self.stream);
         i.generics.to_tokens(self.stream);
         i.braces.surround(self.stream, |stream| {
@@ -116,6 +118,7 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                 stream,
                 enum_stream: None,
                 specific_derives: self.specific_derives,
+                generics: self.generics,
                 serde_support: self.serde_support,
                 rkyv_support: self.rkyv_support,
             };
@@ -139,7 +142,7 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
             let current = self.current as u16;
             let enum_ident = syn::Ident::new(&format!("{}", i.name), i.name.span());
             let enum_var_ident = syn::Ident::new(&format!("V{}", current), i.name.span());
-            let alias_enum_name = format!("{}", i.name);
+            // let alias_enum_name = format!("{}", i.name);
             let fixed_id_name = match &self.fixed_id_prefix {
                 None => syn::Path::from(name.clone()),
                 Some(prefix) => {
@@ -155,9 +158,10 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                 }
             };
             self.stream.append_all(quote! {
-                self::fixed_type_id_without_version_hash! {
-                    #[FixedTypeIdVersion((#current,0,0))]
-                    #[FixedTypeIdEqualTo(#alias_enum_name)]
+                self::fixed_type_id! {
+                    #[version((#current,0,0))]
+                    #[equal_to(#enum_ident)]
+                    #[omit_version_hash]
                     #fixed_id_name
                 }
 
@@ -200,12 +204,12 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
         if matches!(i.fields, Fields::Unnamed { .. } | Fields::Unit) {
             token::Semi(Span::call_site()).to_tokens(self.stream);
         }
-
+        self.generics.insert(self.current, i.generics.clone());
         if self.with_revision_suffix {
             let current = self.current as u16;
             let enum_ident = syn::Ident::new(&format!("{}", i.name), i.name.span());
             let enum_var_ident = syn::Ident::new(&format!("V{}", current), i.name.span());
-            let alias_enum_name = format!("{}", i.name);
+            // let alias_enum_name = format!("{}", i.name);
             let fixed_id_name = match &self.fixed_id_prefix {
                 None => syn::Path::from(name.clone()),
                 Some(prefix) => {
@@ -221,9 +225,10 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                 }
             };
             self.stream.append_all(quote! {
-                self::fixed_type_id_without_version_hash! {
-                    #[FixedTypeIdVersion((#current,0,0))]
-                    #[FixedTypeIdEqualTo(#alias_enum_name)]
+                self::fixed_type_id! {
+                    #[version((#current,0,0))]
+                    #[equal_to(#enum_ident)]
+                    #[omit_version_hash]
                     #fixed_id_name
                 }
 
@@ -282,6 +287,7 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                         stream,
                         enum_stream: None,
                         specific_derives: self.specific_derives,
+                        generics: self.generics,
                         serde_support: self.serde_support,
                         rkyv_support: self.rkyv_support,
                     };
@@ -313,6 +319,7 @@ impl<'a, 'ast> Visit<'ast> for Reexport<'a> {
                         stream,
                         enum_stream: None,
                         specific_derives: self.specific_derives,
+                        generics: self.generics,
                         serde_support: self.serde_support,
                         rkyv_support: self.rkyv_support,
                     };

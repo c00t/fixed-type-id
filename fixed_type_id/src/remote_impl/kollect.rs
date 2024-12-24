@@ -1,10 +1,10 @@
 use kollect::{LinearMap, LinearSet, OrderedMap, OrderedSet, UnorderedMap, UnorderedSet};
 
-use crate::{fstr_to_str, implement_wrapper_fixed_type_id, ConstTypeName, FixedTypeId};
+use crate::prelude::*;
 
-implement_wrapper_fixed_type_id!(
-    LinearMap<K,V> => "kollect::LinearMap";
-    LinearSet<K> => "kollect::LinearSet";
+fixed_type_id!(
+    kollect::LinearMap<K:FixedTypeId,V:FixedTypeId>;
+    kollect::LinearSet<K:FixedTypeId>;
 );
 
 impl<K: FixedTypeId, V: FixedTypeId, S> FixedTypeId for OrderedMap<K, V, S> {
@@ -16,11 +16,11 @@ impl<K: FixedTypeId, S> FixedTypeId for OrderedSet<K, S> {
 }
 
 impl<K: FixedTypeId, V: FixedTypeId, S> ConstTypeName for OrderedMap<K, V, S> {
-    const RAW_SLICE: &[&str] = &["OrderedMap<", K::TYPE_NAME, ",", V::TYPE_NAME, ">"];
+    const RAW_SLICE: &[&str] = &["kollect::OrderedMap<", K::TYPE_NAME, ",", V::TYPE_NAME, ">"];
 }
 
 impl<K: FixedTypeId, S> ConstTypeName for OrderedSet<K, S> {
-    const RAW_SLICE: &[&str] = &["OrderedSet<", K::TYPE_NAME, ">"];
+    const RAW_SLICE: &[&str] = &["kollect::OrderedSet<", K::TYPE_NAME, ">"];
 }
 
 impl<K: FixedTypeId, V: FixedTypeId, S> FixedTypeId for UnorderedMap<K, V, S> {
@@ -32,9 +32,15 @@ impl<K: FixedTypeId, S> FixedTypeId for UnorderedSet<K, S> {
 }
 
 impl<K: FixedTypeId, V: FixedTypeId, S> ConstTypeName for UnorderedMap<K, V, S> {
-    const RAW_SLICE: &[&str] = &["UnorderedMap<", K::TYPE_NAME, ",", V::TYPE_NAME, ">"];
+    const RAW_SLICE: &[&str] = &[
+        "kollect::UnorderedMap<",
+        K::TYPE_NAME,
+        ",",
+        V::TYPE_NAME,
+        ">",
+    ];
 }
 
 impl<K: FixedTypeId, S> ConstTypeName for UnorderedSet<K, S> {
-    const RAW_SLICE: &[&str] = &["UnorderedSet<", K::TYPE_NAME, ">"];
+    const RAW_SLICE: &[&str] = &["kollect::UnorderedSet<", K::TYPE_NAME, ">"];
 }

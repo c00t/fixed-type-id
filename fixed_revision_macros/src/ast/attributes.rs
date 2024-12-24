@@ -20,6 +20,7 @@ mod kw {
     syn::custom_keyword!(variant_index);
     syn::custom_keyword!(order);
     syn::custom_keyword!(discriminant);
+    syn::custom_keyword!(skip_fixedid_gen);
     syn::custom_keyword!(fixed_id_prefix);
     syn::custom_keyword!(default_version);
     syn::custom_keyword!(serde_support);
@@ -241,6 +242,7 @@ impl AttributeOptions for FieldOptions {
 #[derive(Debug)]
 pub struct ItemOptions {
     pub revision: Option<usize>,
+    pub skip_fixedid_gen: bool,
     pub fixed_id_prefix: Option<Path>,
     pub default_version: Option<usize>,
     pub serde_support: bool,
@@ -249,6 +251,7 @@ pub struct ItemOptions {
 
 pub enum ItemOption {
     Revision(ValueOption<kw::revision, LitInt>),
+    SkipFixedIdGen(kw::skip_fixedid_gen),
     FixedIdPrefix(ValueOption<kw::fixed_id_prefix, LitStr>),
     DefaultVersion(ValueOption<kw::default_version, LitInt>),
     SerdeSupport(kw::serde_support),
@@ -272,6 +275,9 @@ impl Parse for ItemOption {
         if input.peek(kw::rkyv_support) {
             return Ok(ItemOption::RkyvSupport(input.parse()?));
         }
+        if input.peek(kw::skip_fixedid_gen) {
+            return Ok(ItemOption::SkipFixedIdGen(input.parse()?));
+        }
 
         return Err(input.error("invalid item option"));
     }
@@ -286,6 +292,7 @@ impl AttributeOptions for ItemOptions {
         let mut default_version = None;
         let mut serde_support = None;
         let mut rkyv_support = None;
+        let mut skip_fixedid_gen = None;
         for option in options {
             match option {
                 ItemOption::Revision(x) => {
@@ -307,6 +314,15 @@ impl AttributeOptions for ItemOptions {
                     }
                     let path: Path = x.value.parse()?;
                     fixed_id_prefix = Some(path);
+                }
+                ItemOption::SkipFixedIdGen(x) => {
+                    if skip_fixedid_gen.is_some() {
+                        return Err(Error::new(
+                            x.span(),
+                            "tried to set an option `skip_fixedid_gen` twice",
+                        ));
+                    }
+                    skip_fixedid_gen = Some(true);
                 }
                 ItemOption::DefaultVersion(x) => {
                     if default_version.is_some() {
@@ -340,6 +356,7 @@ impl AttributeOptions for ItemOptions {
 
         Ok(Self {
             revision,
+            skip_fixedid_gen: skip_fixedid_gen.unwrap_or(false),
             fixed_id_prefix,
             default_version,
             serde_support: serde_support.unwrap_or(false),

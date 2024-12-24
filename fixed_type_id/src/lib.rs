@@ -12,9 +12,13 @@ mod remote_impl;
 use core::fmt;
 use std::hash::Hash;
 
-pub use fixed_type_id_macros::{
-    fixed_type_id, fixed_type_id_without_version_hash, random_fixed_type_id,
-};
+/// Prelude used with [`fixed_type_id`]
+pub mod prelude {
+    pub use super::fixed_type_id;
+    pub use super::{fstr_to_str, ConstTypeName, FixedId, FixedTypeId, FixedVersion};
+}
+
+pub use fixed_type_id_macros::fixed_type_id;
 use semver::Version;
 
 /// The length of the type name, can be configured by feature flags `len128`, `len64` and `len256`, the default is `len128`.
@@ -334,7 +338,7 @@ pub fn name_version_to_hash(name: &str, version: &FixedVersion) -> u64 {
 ///
 /// ```rust
 /// # #![cfg_attr(feature = "specialization", feature(specialization))]
-/// use fixed_type_id::{ConstTypeName, FixedTypeId, fstr_to_str};
+/// use fixed_type_id::prelude::*;
 /// pub struct A<T> {
 ///     pub t: T,
 /// }
@@ -376,80 +380,6 @@ pub fn type_version<T: ?Sized + FixedTypeId>() -> FixedVersion {
     T::TYPE_VERSION
 }
 
-/// Implements [`FixedTypeId`] and [`ConstTypeName`] for wrapper types with 1 or moregeneric parameters which implement [`FixedTypeId`].
-///
-/// It's useful for types like `Vec<T>`, `HashMap<K,V>`, `Option<T>`, etc.
-///
-/// When you want to implement [`FixedTypeId`] for types with 0 generic parameters, use [`fixed_type_id!`] or [`fixed_type_id_without_version_hash!`] instead,
-/// or implement it manually.
-#[macro_export]
-macro_rules! implement_wrapper_fixed_type_id {
-    // New arm for handling generic with bounds
-    (@impl_generics $wrapper:ident, ($first:ident: $bound:path $(, $rest:ident)*), $prefix:expr) => {
-        impl<$first $(, $rest)*> FixedTypeId for $wrapper<$first $(, $rest)*>
-        where
-            $first: FixedTypeId + $bound,
-            $($rest: FixedTypeId,)*
-            Self: ConstTypeName,
-        {
-            const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
-        }
-
-        impl<$first $(, $rest)*> ConstTypeName for $wrapper<$first $(, $rest)*>
-        where
-            $first: FixedTypeId + $bound,
-            $($rest: FixedTypeId,)*
-        {
-            const RAW_SLICE: &[&str] = &[
-                $prefix,
-                "<",
-                $first::TYPE_NAME,
-                $(
-                    ",",
-                    $rest::TYPE_NAME,
-                )*
-                ">"
-            ];
-        }
-    };
-
-    // Original arm for simple generics (keep for backward compatibility)
-    (@impl_generics $wrapper:ident, ($first:ident $(, $rest:ident)*), $prefix:expr) => {
-        impl<$first $(, $rest)*> FixedTypeId for $wrapper<$first $(, $rest)*>
-        where
-            $first: FixedTypeId,
-            $($rest: FixedTypeId,)*
-            Self: ConstTypeName,
-        {
-            const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
-        }
-
-        impl<$first: FixedTypeId $(, $rest: FixedTypeId)*> ConstTypeName for $wrapper<$first $(, $rest)*>
-        where
-            $first: FixedTypeId,
-            $($rest: FixedTypeId,)*
-        {
-            const RAW_SLICE: &[&str] = &[
-                $prefix,
-                "<",
-                $first::TYPE_NAME,
-                $(
-                    ",",
-                    $rest::TYPE_NAME,
-                )*
-                ">"
-            ];
-        }
-    };
-
-    // Entry point - handle both bounded and unbounded generics
-    ($($wrapper:ident<$first:ident $(: $bound:path)? $(, $rest:ident)*> => $prefix:expr);* $(;)?) => {
-        $(
-            implement_wrapper_fixed_type_id!(@impl_generics $wrapper, ($first $(: $bound)? $(, $rest)*), $prefix);
-        )*
-    };
-}
-
 /// Helper function to convert a fixed string [`fixedstr_ext::fstr`] to a string.
 pub const fn fstr_to_str<const N: usize>(fstr: &'static fixedstr_ext::fstr<N>) -> &'static str {
     unsafe { core::str::from_raw_parts(fstr.to_ptr(), fstr.len()) }
@@ -484,22 +414,28 @@ impl<T> FixedTypeId for T {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::name_version_to_hash;
+
+    use super::prelude::*;
 
     #[test]
     fn unique_id_typeid_equal_to() {
         pub struct A1;
         pub struct A2;
-        fixed_type_id_without_version_hash! {
-          #[FixedTypeIdVersion((0,1,0))]
+        fixed_type_id! {
+          #[version((0,1,0))]
+          #[omit_version_hash]
           A1;
         }
-        fixed_type_id_without_version_hash! {
-          #[FixedTypeIdVersion((0,2,0))]
-          #[FixedTypeIdEqualTo("A1")]
+        fixed_type_id! {
+          #[version((0,2,0))]
+          #[equal_to(A1)]
           A2;
         }
-
+        assert_eq!(
+            <A1 as FixedTypeId>::TYPE_ID,
+            FixedId::from_type_name(<A1 as FixedTypeId>::TYPE_NAME, None)
+        );
         assert_eq!(<A1 as FixedTypeId>::TYPE_NAME, "A1");
         assert_eq!(<A2 as FixedTypeId>::TYPE_NAME, "A2");
         assert_eq!(<A1 as FixedTypeId>::TYPE_ID, <A2 as FixedTypeId>::TYPE_ID);
@@ -524,9 +460,19 @@ mod tests {
         }
         assert_eq!(<A<u8> as FixedTypeId>::TYPE_NAME, "A<u8>");
         assert_eq!(<A<u16> as FixedTypeId>::TYPE_NAME, "A<u16>");
-        assert_ne!(
+        assert_eq!(
             <A<u8> as FixedTypeId>::TYPE_ID,
-            <A<u16> as FixedTypeId>::TYPE_ID
+            FixedId::from_type_name(
+                <A<u8> as FixedTypeId>::TYPE_NAME,
+                Some(FixedVersion::new(0, 0, 0))
+            )
+        );
+        assert_eq!(
+            <A<u16> as FixedTypeId>::TYPE_ID,
+            FixedId::from_type_name(
+                <A<u16> as FixedTypeId>::TYPE_NAME,
+                Some(FixedVersion::new(0, 0, 0))
+            )
         );
         assert_eq!(
             <A<u8> as FixedTypeId>::TYPE_VERSION,
@@ -597,5 +543,123 @@ mod tests {
             FixedId::from_type_name("NOT_IMPLEMENTED", Some(FixedVersion::new(0, 0, 0)))
         );
         assert_eq!(<A as FixedTypeId>::TYPE_VERSION, FixedVersion::new(0, 0, 0));
+    }
+
+    #[test]
+    fn generic_auto_1_param() {
+        pub struct GenericType<T> {
+            some: T,
+            u32: u32,
+        }
+        use std::ops::Add;
+        pub trait DefTrait {}
+        fixed_type_id! {
+            #[version((0,1,0))]
+            #[omit_version_hash]
+            tests::generic_auto::GenericType<T: FixedTypeId + DefTrait>;
+        };
+        impl DefTrait for u8 {}
+
+        assert_eq!(
+            <GenericType<u8> as FixedTypeId>::TYPE_NAME,
+            "tests::generic_auto::GenericType<u8>"
+        );
+        assert_eq!(
+            <GenericType<u8> as FixedTypeId>::TYPE_VERSION,
+            FixedVersion::new(0, 1, 0)
+        );
+        assert_eq!(
+            <GenericType<u8> as FixedTypeId>::TYPE_ID,
+            FixedId::from_type_name(<GenericType<u8> as FixedTypeId>::TYPE_NAME, None)
+        )
+    }
+
+    #[test]
+    fn generic_auto_2_param() {
+        pub struct GenericType<T, U> {
+            some_t: T,
+            some_u: U,
+            u32: u32,
+        }
+        pub trait DefTrait {}
+        fixed_type_id! {
+            #[version((0,1,0))]
+            #[omit_version_hash]
+            tests::generic_auto::GenericType<T:, U:FixedTypeId + DefTrait>;
+        };
+        impl DefTrait for u8 {}
+
+        assert_eq!(
+            <GenericType<u8, u8> as FixedTypeId>::TYPE_NAME,
+            "tests::generic_auto::GenericType<u8>"
+        );
+        assert_eq!(
+            <GenericType<u8, u8> as FixedTypeId>::TYPE_VERSION,
+            FixedVersion::new(0, 1, 0)
+        );
+        assert_eq!(
+            <GenericType<u8, u8> as FixedTypeId>::TYPE_ID,
+            FixedId::from_type_name(<GenericType<u8, u8> as FixedTypeId>::TYPE_NAME, None)
+        );
+
+        pub struct GenericType2<T, U> {
+            some_t: T,
+            some_u: U,
+            u32: u32,
+        }
+        fixed_type_id! {
+            #[version((0,1,0))]
+            #[omit_version_hash]
+            tests::generic_auto::GenericType2<T:FixedTypeId + DefTrait, U:FixedTypeId + DefTrait>;
+        };
+
+        assert_eq!(
+            <GenericType2<u8, u8> as FixedTypeId>::TYPE_NAME,
+            "tests::generic_auto::GenericType2<u8,u8>"
+        );
+        assert_eq!(
+            <GenericType2<u8, u8> as FixedTypeId>::TYPE_VERSION,
+            FixedVersion::new(0, 1, 0)
+        );
+        assert_eq!(
+            <GenericType2<u8, u8> as FixedTypeId>::TYPE_ID,
+            FixedId::from_type_name(<GenericType2<u8, u8> as FixedTypeId>::TYPE_NAME, None)
+        )
+    }
+
+    #[test]
+    fn generic_auto_equal_to() {
+        pub struct GenericType<T> {
+            some: T,
+            u32: u32,
+        }
+        pub enum EqualType<T> {
+            X(T),
+            Y(u32),
+        }
+        pub trait DefTrait {}
+        fixed_type_id! {
+            tests::generic_auto::EqualType<T: FixedTypeId>;
+        }
+        fixed_type_id! {
+            #[version((0,1,0))]
+            #[omit_version_hash]
+            #[equal_to(EqualType<T>)]
+            tests::generic_auto::GenericType<T: FixedTypeId + DefTrait>;
+        };
+        impl DefTrait for u8 {}
+
+        assert_eq!(
+            <GenericType<u8> as FixedTypeId>::TYPE_NAME,
+            "tests::generic_auto::GenericType<u8>"
+        );
+        assert_eq!(
+            <GenericType<u8> as FixedTypeId>::TYPE_VERSION,
+            FixedVersion::new(0, 1, 0)
+        );
+        assert_eq!(
+            <GenericType<u8> as FixedTypeId>::TYPE_ID,
+            <EqualType<u8> as FixedTypeId>::TYPE_ID
+        )
     }
 }

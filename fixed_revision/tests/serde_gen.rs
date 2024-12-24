@@ -2,10 +2,9 @@ use std::num::Wrapping;
 
 use fixed_revision::{FixedTypeIdTag, FixedTypeIdTagged, TypeIdMismatchError, VersionTooNewError};
 use fixed_revision_macros::revisioned;
-use fixed_type_id::{
-    fixed_type_id_without_version_hash, type_id, type_name, type_version, FixedId, FixedTypeId,
-    FixedVersion,
-};
+use fixed_type_id::{type_id, type_name, type_version};
+
+use fixed_type_id::prelude::*;
 
 #[revisioned(
     revision = 3,
@@ -126,6 +125,14 @@ pub struct Tester4 {
     #[revision(start = 3)]
     wrapping_1: Wrapping<u32>,
 }
+
+// #[revisioned(
+//     revision = 1
+// )]
+// pub struct GenericTest<T> {
+//     some: T,
+//     u32_1: u32,
+// }
 
 #[test]
 fn basic_gen() {

@@ -5,7 +5,10 @@ mod ser;
 mod validate_version;
 
 use core::panic;
-use std::{collections::HashSet, u16};
+use std::{
+    collections::{HashMap, HashSet},
+    u16,
+};
 
 use common::{rkyv_compare_trait_fn, rkyv_derive_trait_fn};
 use de::{DeserializeVisitor, EnumStructsVisitor};
@@ -59,6 +62,11 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         (false, false) => false,
     };
 
+    let skip_fixedid_gen = match (&ast.attrs.options.rkyv_support, &attrs.0.rkyv_support) {
+        (true, false) | (false, true) | (true, true) => true,
+        (false, false) => false,
+    };
+
     // Note(cupofc0t): Maybe increase the max revision to u32 or u64 in the future, but i don't think it's necessary for serializing usage.
     if revision > u16::MAX as usize {
         return Err(syn::Error::new(
@@ -79,6 +87,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
     let mut enum_stream = TokenStream::new();
 
     let mut specific_derives = HashSet::new();
+    let mut generics = HashMap::new();
     // deserialize implementation
     let reexport_revisions = (1..=revision)
         .map(|x| {
@@ -91,6 +100,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                 stream: &mut reexport,
                 enum_stream: Some(&mut enum_stream),
                 specific_derives: &mut specific_derives,
+                generics: &mut generics,
                 serde_support,
                 rkyv_support,
             }
@@ -175,7 +185,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
 
     let enum_def_name_str = format!("{}Def", name);
     let enum_def_name = Ident::new(&enum_def_name_str, name.span());
-    let enum_name_str = format!("{}", name);
+    // let enum_name_str = format!("{}", name);
     let enum_def_from_stream = {
         let mut stream = TokenStream::new();
         (1..=revision).for_each(|x| {
@@ -389,15 +399,17 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
 
             #enum_alias_rkyv_impl
 
-            self::fixed_type_id_without_version_hash! {
-                #[FixedTypeIdVersion((#revision,0,0))]
+            self::fixed_type_id! {
+                #[version((#revision,0,0))]
+                #[omit_version_hash]
                 #fixed_id_name
             }
 
-            self::fixed_type_id_without_version_hash! {
+            self::fixed_type_id! {
                 // it's always the current revision
-                #[FixedTypeIdVersion((#revision,0,0))]
-                #[FixedTypeIdEqualTo(#enum_name_str)]
+                #[version((#revision,0,0))]
+                #[equal_to(#name)]
+                #[omit_version_hash]
                 #fixed_id_def_name
             }
         },
@@ -410,8 +422,9 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
 
             #enum_alias_rkyv_impl
 
-            self::fixed_type_id_without_version_hash! {
-                #[FixedTypeIdVersion((#revision,0,0))]
+            self::fixed_type_id! {
+                #[version((#revision,0,0))]
+                #[omit_version_hash]
                 #fixed_id_name
             }
         },

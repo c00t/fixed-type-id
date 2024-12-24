@@ -1,6 +1,6 @@
 use macaw::*;
 
-use crate::{fixed_type_id, FixedId, FixedTypeId, FixedVersion};
+use crate::prelude::*;
 
 fixed_type_id! {
     macaw::Affine3A;

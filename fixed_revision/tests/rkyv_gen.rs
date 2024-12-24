@@ -5,10 +5,9 @@
 
 use fixed_revision::{FixedTypeIdTag, FixedTypeIdTagged, TypeIdMismatchError, VersionTooNewError};
 use fixed_revision_macros::revisioned;
-use fixed_type_id::{
-    fixed_type_id_without_version_hash, type_id, type_name, type_version, FixedId, FixedTypeId,
-    FixedVersion,
-};
+use fixed_type_id::{type_id, type_name, type_version};
+
+use fixed_type_id::prelude::*;
 
 use rkyv::{from_bytes, rancor::Error, to_bytes, Archive, Deserialize, Serialize};
 

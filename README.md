@@ -27,7 +27,8 @@ The example usage:
 
 ```rust
 # #![cfg_attr(feature = "specialization", feature(specialization))]
-use fixed_type_id::{FixedTypeId, FixedId, FixedVersion, fixed_type_id, name_version_to_hash};
+use fixed_type_id::prelude::*;
+use fixed_type_id::name_version_to_hash;
 use std::hash::Hasher;
 
 mod m {
@@ -38,8 +39,8 @@ mod m {
     pub trait E<T> {}
     fixed_type_id!{
         // default to (0,0,0)
-        #[FixedTypeIdVersion((0,1,0))]
-        // #[FixedTypeIdFile("types.toml")]
+        #[version((0,1,0))]
+        // #[store_in_file("types.toml")]
         // no default, but when store into file, version will be dropped, so only use it for debug.
         dyn m::Q; // type name is "dyn m::Q", it only store the type name you provided, without modification.
         dyn W; // type name is "dyn W", though `W` is under `m` module, it still store "dyn W"
@@ -60,31 +61,17 @@ assert_eq!(<A as FixedTypeId>::TYPE_VERSION, FixedVersion::new(0,1,0));
 assert_eq!(<A as FixedTypeId>::TYPE_NAME, "A");
 ```
 
-If you want to define for your generic struct, you can use [`implement_wrapper_fixed_type_id`]:
+It can work with types with generics:
 
 ```rust
 # #![cfg_attr(feature = "specialization", feature(specialization))]
-use fixed_type_id::{FixedTypeId, FixedId, ConstTypeName, fstr_to_str, FixedVersion, implement_wrapper_fixed_type_id};
-use std::ops::Add;
-
-pub struct MyStruct<T: Add> {
-    pub x: T,
-}
-
-implement_wrapper_fixed_type_id!{
-    // You can define a typename with different module path, but it's not recommended.
-    // Generally, you should define it in the same module as the struct for better readability.
-    MyStruct<T:Add> => "SomeSpecialModule::MyStruct"
-}
-
-assert_eq!(<MyStruct<u8> as FixedTypeId>::TYPE_NAME, "SomeSpecialModule::MyStruct<u8>");
 ```
 
 Also, you can define this trait yoursellf:
 
 ```rust
 # #![cfg_attr(feature = "specialization", feature(specialization))]
-use fixed_type_id::{FixedTypeId, FixedId, FixedVersion};
+use fixed_type_id::prelude::*;
 use rapidhash::rapidhash;
 
 struct MyType;
@@ -106,7 +93,7 @@ There are standalone functions to get the type_name, type_id and type_version, l
 ```rust
 # #![cfg_attr(feature = "specialization", feature(specialization))]
 use fixed_type_id::{type_name, type_id, type_version};
-use fixed_type_id::{FixedTypeId, FixedId, FixedVersion};
+use fixed_type_id::prelude::*;
 
 struct MyType;
 
@@ -161,23 +148,16 @@ If we choose to store a `&[&str]` in const and then concat them at runtime, the 
 
 So currently we choose to generate it in const context.
 
-#### Differences between `fixed_type_id`, `fixed_type_id_without_version_hash` and `random_fixed_type_id`
+#### Features of `fixed_type_id`
 
-- `fixed_type_id`: Generate a unique id for the type, with a [`FixedId`] that [`rapidhash::rapidhash`] the name you provided,
-  the version is also hashed into the [`FixedId`]. Version defaults to `(0,0,0)`, use `#[FixedTypeIdVersion((0,1,0))]` to change it.
-  Use it when you want that different versions of your type have different ids.
-- `fixed_type_id_without_version_hash`: Generate a unique id for the type, with a [`FixedId`] that [`rapidhash::rapidhash`] the name you provided,
-  without version hashed into the [`FixedId`]. Use it when you want that different versions of your type have the same id.
-- `random_fixed_type_id`: Generate a random id for the type, with a [`FixedId`] that random generated for each build.
+This proc macro can be used with:
 
-All these macros can be used with:
-
-- `#[FixedTypeIdVersion((x,y,z))]`: Set the version to `(x,y,z)`.
-- `#[FixedTypeIdFile("filename.toml")]`: Store the type id into a file, so you can use it for debug, make sure the file already exists.
-- `#[FixedTypeIdEqualTo("other_type")]`: Make the type id [`FixedId`] equal to `other_type`, so the two types have the same id, but different type names, and versions.
+- `#[version((x,y,z))]`: Set the version to `(x,y,z)`.
+- `#[store_in_file("filename.toml")]`: Store the type id into a file, so you can use it for debug, make sure the file already exists.
+- `#[equal_to("other_type")]`: Make the type id [`FixedId`] equal to `other_type`, so the two types have the same id, but different type names, and versions.
+- `#[omit_version_hash]`: Generate the [`FixedId`] without hash the [`FixedVersion`] version data into it.
+- `#[random_id]`: Generate a random [`FixedId`].
 
 #### Erase Type Name
 
 It can be configured by feature flag `erase_name`, default is disabled.
-
-Currently, it only works for implementation of [`FixedTypeId`] by `fixed_type_id` and `fixed_type_id_without_version_hash`.

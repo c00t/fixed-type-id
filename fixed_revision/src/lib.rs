@@ -1,5 +1,6 @@
 use core::fmt;
 
+pub use fixed_revision_macros::revisioned;
 use fixed_type_id::{type_id, FixedId, FixedTypeId, FixedVersion};
 
 /// A struct that wraps a type id and a data.

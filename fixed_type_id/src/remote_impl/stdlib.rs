@@ -1,9 +1,5 @@
-use fixed_type_id_macros::fixed_type_id;
-
+use crate::prelude::*;
 use crate::usize_to_str;
-use crate::{
-    fstr_to_str, implement_wrapper_fixed_type_id, ConstTypeName, FixedId, FixedTypeId, FixedVersion,
-};
 
 // implement the trait for primitive types in prelude
 fixed_type_id! {
@@ -78,35 +74,19 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::collections::{BTreeMap, HashMap};
 
-// impl types with 1 or more generic parameters
-implement_wrapper_fixed_type_id! {
-  PhantomData<T> => "core::marker::PhantomData";
-  Vec<T> => "alloc::vec::Vec";
-  VecDeque<T> => "alloc::collections::VecDeque";
-  // HashMap<K,V> => "std::collections::HashMap";
-  // Box<T: ?Sized> => "alloc::boxed::Box";
-  BTreeMap<K,V> => "alloc::collections::BTreeMap";
-  Option<T> => "core::option::Option";
-  Result<T,E> => "core::result::Result";
-  Range<T> => "core::ops::Range";
-  RangeFrom<T> => "core::ops::RangeFrom";
-  RangeTo<T> => "core::ops::RangeTo";
-  RangeToInclusive<T> => "core::ops::RangeToInclusive";
-  NonZero<T: ZeroablePrimitive> => "core::num::nonzero::NonZero";
-}
-
-impl<K: FixedTypeId, V: FixedTypeId, S> FixedTypeId for HashMap<K, V, S> {
-    const TYPE_NAME: &'static str = fstr_to_str(&Self::TYPE_NAME_FSTR);
-}
-
-impl<K: FixedTypeId, V: FixedTypeId, S> ConstTypeName for HashMap<K, V, S> {
-    const RAW_SLICE: &[&str] = &[
-        "std::collections::HashMap<",
-        K::TYPE_NAME,
-        ",",
-        V::TYPE_NAME,
-        ">",
-    ];
+fixed_type_id! {
+    core::marker::PhantomData<T: FixedTypeId>;
+    alloc::vec::Vec<T: FixedTypeId>;
+    alloc::collections::VecDeque<T: FixedTypeId>;
+    std::collections::HashMap<K: FixedTypeId, V:FixedTypeId, S:>;
+    alloc::collections::BTreeMap<K:FixedTypeId,V:FixedTypeId>;
+    core::option::Option<T:FixedTypeId>;
+    core::result::Result<T:FixedTypeId,E:FixedTypeId>;
+    core::ops::Range<T:FixedTypeId>;
+    core::ops::RangeFrom<T:FixedTypeId>;
+    core::ops::RangeTo<T:FixedTypeId>;
+    core::ops::RangeToInclusive<T:FixedTypeId>;
+    core::num::nonzero::NonZero<T:ZeroablePrimitive + FixedTypeId>;
 }
 
 use core::convert::Infallible;
