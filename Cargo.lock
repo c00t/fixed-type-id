@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "fixed-type-id"
-version = "0.1.4"
+version = "0.2.0"
 dependencies = [
  "either",
  "fixed-type-id-macros",
@@ -151,7 +151,7 @@ dependencies = [
 
 [[package]]
 name = "fixed-type-id-macros"
-version = "0.1.3"
+version = "0.2.0"
 dependencies = [
  "fixed-type-id",
  "proc-macro2",
