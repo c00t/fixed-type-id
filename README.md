@@ -65,6 +65,63 @@ It can work with types with generics:
 
 ```rust
 # #![cfg_attr(feature = "specialization", feature(specialization))]
+use fixed_type_id::name_version_to_hash;
+use fixed_type_id::prelude::*;
+
+mod m {
+    use fixed_type_id::prelude::*;
+    pub trait DefTrait {}
+    impl DefTrait for u8 {}
+    pub struct GenericType<T, U> {
+        some_t: T,
+        some_u: U,
+        u32: u32,
+    }
+    fixed_type_id! {
+        #[version((0,1,0))]
+        #[omit_version_hash]
+        tests::generic_auto::GenericType<T:, U:FixedTypeId + DefTrait>;
+    }
+
+    pub struct GenericType2<T, U> {
+        some_t: T,
+        some_u: U,
+        u32: u32,
+    }
+    fixed_type_id! {
+        #[version((0,1,0))]
+        #[omit_version_hash]
+        tests::generic_auto::GenericType2<T:FixedTypeId + DefTrait, U:FixedTypeId + DefTrait>;
+    }
+}
+use m::*;
+
+
+assert_eq!(
+    <GenericType<u8, u8> as FixedTypeId>::TYPE_NAME,
+    "tests::generic_auto::GenericType<u8>"
+);
+assert_eq!(
+    <GenericType<u8, u8> as FixedTypeId>::TYPE_VERSION,
+    FixedVersion::new(0, 1, 0)
+);
+assert_eq!(
+    <GenericType<u8, u8> as FixedTypeId>::TYPE_ID,
+    FixedId::from_type_name(<GenericType<u8, u8> as FixedTypeId>::TYPE_NAME, None)
+);
+
+assert_eq!(
+    <GenericType2<u8, u8> as FixedTypeId>::TYPE_NAME,
+    "tests::generic_auto::GenericType2<u8,u8>"
+);
+assert_eq!(
+    <GenericType2<u8, u8> as FixedTypeId>::TYPE_VERSION,
+    FixedVersion::new(0, 1, 0)
+);
+assert_eq!(
+    <GenericType2<u8, u8> as FixedTypeId>::TYPE_ID,
+    FixedId::from_type_name(<GenericType2<u8, u8> as FixedTypeId>::TYPE_NAME, None)
+)
 ```
 
 Also, you can define this trait yoursellf:
