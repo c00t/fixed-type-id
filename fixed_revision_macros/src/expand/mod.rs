@@ -278,13 +278,14 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
     let enum_alias_serde_impl = if serde_support {
         quote! {
             impl #name {
-                pub fn deserialize_serde<'de, F, T, E>(de_fn: F) -> ::core::result::Result<Self, E>
+                /// Automatically deserialize corresponding version tagged struct with given deserializer
+                pub fn deserialize_serde<'de, F, T, E>(get_deserializer: F) -> ::core::result::Result<Self, E>
                 where
                     F: Fn() -> T,
                     for<'a> &'a mut T: ::serde::de::Deserializer<'de, Error = E>,
                     E: ::serde::de::Error,
                 {
-                    let mut de = de_fn();
+                    let mut de = get_deserializer();
                     let tag: FixedTypeIdTag = ::serde::Deserialize::deserialize(&mut de)?;
                     let (id, ver) = tag.get_identifier();
                     let de_ver = ver.major;
@@ -296,8 +297,20 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                     if current_max_ver < de_ver {
                         return Err(::serde::de::Error::custom(format!("version too new, current_max:{}, de_ver:{}", current_max_ver, de_ver)));
                     }
-                    let mut de = de_fn();
+                    let mut de = get_deserializer();
                     ::serde::Deserialize::deserialize(&mut de)
+                }
+
+                /// Serialize this struct into a version tagged struct.
+                /// 
+                /// For serde, you can use this method or specific methods provides by the serde lib you choose.
+                /// This method is just provided for API consistency with rkyv or other binary serialize framework.
+                pub fn serialize_serde<F, T, E>(&self, serialize_fn: F) -> ::core::result::Result<T, E>
+                where
+                    F: Fn(&Self) -> ::core::result::Result<T,E>,
+                    E: ::std::error::Error,
+                {
+                    serialize_fn(self)
                 }
             }
         }
@@ -351,6 +364,24 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                     let archived_tagged = ::rkyv::access::<::rkyv::Archived<self::FixedTypeIdTagged<Self>>, _>(data)?;
                     let archived_enum = archived_tagged.data.get();
                     ::rkyv::deserialize(archived_enum)
+                }
+
+                pub fn serialize_rkyv<E>(&self) -> ::core::result::Result<::rkyv::util::AlignedVec,E>
+                where
+                    E: ::rkyv::rancor::Source
+                {
+                    ::rkyv::to_bytes::<E>(
+                        &::core::convert::Into::<::fixed_revision::FixedTypeIdTagged<Self>>::into(self.clone()),
+                    )
+                }
+
+                pub fn serialize_into_rkyv<E>(self) -> ::core::result::Result<::rkyv::util::AlignedVec,E>
+                where
+                    E: ::rkyv::rancor::Source
+                {
+                    ::rkyv::to_bytes::<E>(
+                        &::core::convert::Into::<::fixed_revision::FixedTypeIdTagged<Self>>::into(self),
+                    )
                 }
             }
         }

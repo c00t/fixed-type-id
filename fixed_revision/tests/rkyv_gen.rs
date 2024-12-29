@@ -3,7 +3,9 @@
 //! [`String`] can't be put inside types with automatically `rkyv(derive(Clone))` for generated archived type.
 //! So currently `Clone` and `Copy` are not derived for archived type, you should implement them yourself.
 
-use fixed_revision::{FixedTypeIdTag, FixedTypeIdTagged, TypeIdMismatchError, VersionTooNewError};
+use fixed_revision::{
+    access_tag_rkyv, FixedTypeIdTag, FixedTypeIdTagged, TypeIdMismatchError, VersionTooNewError,
+};
 use fixed_revision_macros::revisioned;
 use fixed_type_id::{type_id, type_name, type_version};
 
@@ -159,12 +161,12 @@ fn basic_gen() {
 
     let test_enum = TestEnum::V3(TestEnum_3::Zero);
 
-    let test_enum_rkyv_aligned_vec = rkyv::to_bytes::<Error>(
-        &Into::<FixedTypeIdTagged<TestEnum>>::into(test_enum.clone()),
-    )
-    .unwrap();
+    let test_enum_rkyv_aligned_vec = test_enum.serialize_rkyv::<Error>().unwrap();
     let test_enum_archived = TestEnum::access_rkyv(&test_enum_rkyv_aligned_vec).unwrap();
     assert_eq!(*test_enum_archived, test_enum);
+    let (id, version) = access_tag_rkyv(&test_enum_rkyv_aligned_vec).unwrap();
+    assert_eq!(id, TestEnum::TYPE_ID);
+    assert_eq!(version, TestEnum_3::TYPE_VERSION);
     let test_enum_deser = TestEnum::deserialize_rkyv(&test_enum_rkyv_aligned_vec).unwrap();
     assert_eq!(test_enum_deser, test_enum);
 }

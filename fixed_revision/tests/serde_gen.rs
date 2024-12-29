@@ -1,6 +1,8 @@
 use std::num::Wrapping;
 
-use fixed_revision::{FixedTypeIdTag, FixedTypeIdTagged, TypeIdMismatchError, VersionTooNewError};
+use fixed_revision::{
+    get_tag_serde, FixedTypeIdTag, FixedTypeIdTagged, TypeIdMismatchError, VersionTooNewError,
+};
 use fixed_revision_macros::revisioned;
 use fixed_type_id::{type_id, type_name, type_version};
 
@@ -190,8 +192,13 @@ fn basic_gen() {
     );
 
     let test_enum = TestEnum::V3(TestEnum_3::Zero);
-    let test_enum_str =
-        ron::ser::to_string_pretty(&test_enum, ron::ser::PrettyConfig::default()).unwrap();
+    // let test_enum_str =
+    //     ron::ser::to_string_pretty(&test_enum, ron::ser::PrettyConfig::default()).unwrap();
+    let test_enum_str = test_enum
+        .serialize_serde(|value| {
+            ron::ser::to_string_pretty(&value, ron::ser::PrettyConfig::default())
+        })
+        .unwrap();
     eprintln!("{test_enum_str}");
     let test_enum_deser =
         TestEnum::deserialize_serde(|| ron::de::Deserializer::from_str(&test_enum_str).unwrap())
@@ -216,26 +223,6 @@ fn basic_gen() {
         "Err(Message(\"version too new, current_max:3, de_ver:4\"))"
     );
 
-    let tester3_old = Tester3::V3(Tester3_3 {
-        usize_1: 57918374,
-        isize_1: 1234,
-        u16_1: 1223,
-        i8_1: 14,
-        i32_1: -234234,
-        f32_1: 1.0,
-        f64_1: 2.0,
-        char_1: 'x',
-        bool_1: true,
-        string_1: String::from("A test"),
-        enum_1: test_enum.clone(),
-        option_1: None,
-        vec_1: vec!['a', 'b', 'c'],
-        unit_1: TestUnit::V1(TestUnit_1),
-        tuple_1: TestTuple2_1(vec![234324, 1234234]),
-        box_1: Box::new(String::from("A test")),
-        wrapping_1: Wrapping(1234),
-    });
-
     let test_struct_v3_old = Tester4::V3(Tester4_3 {
         usize_1: 57918374,
         isize_1: 1234,
@@ -255,8 +242,12 @@ fn basic_gen() {
         box_1: Box::new(String::from("A test")),
         wrapping_1: Wrapping(1234),
     });
-    let test_struct_v3_string_old =
-        ron::ser::to_string_pretty(&test_struct_v3_old, ron::ser::PrettyConfig::default()).unwrap();
+    let test_struct_v3_string_old = test_struct_v3_old
+        .serialize_serde(|value| {
+            ron::ser::to_string_pretty(&value, ron::ser::PrettyConfig::default())
+        })
+        .unwrap();
+    // ron::ser::to_string_pretty(&test_struct_v3_old, ron::ser::PrettyConfig::default()).unwrap();
     let test_struct_v3_new = Tester4::V3(Tester4_3 {
         usize_1: 57918374,
         isize_1: 1234,
@@ -276,14 +267,20 @@ fn basic_gen() {
         box_1: Box::new(String::from("A test")),
         wrapping_1: Wrapping(1234),
     });
-    let test_struct_v3_string =
-        ron::ser::to_string_pretty(&test_struct_v3_new, ron::ser::PrettyConfig::default()).unwrap();
+    let test_struct_v3_string = test_struct_v3_new
+        .serialize_serde(|value| {
+            ron::ser::to_string_pretty(&value, ron::ser::PrettyConfig::default())
+        })
+        .unwrap();
+    // ron::ser::to_string_pretty(&test_struct_v3_new, ron::ser::PrettyConfig::default()).unwrap();
     assert_eq!(test_struct_v3_string, test_struct_v3_string_old);
     let test_struct_v3 = ron::from_str::<Tester4>(&test_struct_v3_string_old).unwrap();
-    let meta = ron::from_str::<FixedTypeIdTag>(&test_struct_v3_string_old).unwrap();
-    let (id, version) = meta.get_identifier();
+    // let meta = ron::from_str::<FixedTypeIdTag>(&test_struct_v3_string_old).unwrap();
+    let (id, version) =
+        get_tag_serde(|| ron::de::Deserializer::from_str(&test_struct_v3_string_old).unwrap())
+            .unwrap();
     eprintln!("{:?}", (id, version));
     assert_eq!(test_struct_v3, test_struct_v3_new);
     eprintln!("{}", test_struct_v3_string);
-    assert_eq!(version.major, Tester3::TYPE_VERSION.major);
+    assert_eq!(version.major, Tester4_3::TYPE_VERSION.major);
 }

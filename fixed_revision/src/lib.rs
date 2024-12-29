@@ -296,3 +296,25 @@ impl fmt::Display for VersionTooNewError {
 }
 
 impl core::error::Error for VersionTooNewError {}
+
+/// Get [`FixedId`] and [`FixedVersion`] with serde.
+pub fn get_tag_serde<'de, F, T, E>(
+    get_deserializer: F,
+) -> ::core::result::Result<(FixedId, FixedVersion), E>
+where
+    F: Fn() -> T,
+    for<'a> &'a mut T: ::serde::de::Deserializer<'de, Error = E>,
+    E: ::serde::de::Error,
+{
+    let mut de = get_deserializer();
+    let tag: FixedTypeIdTag = ::serde::Deserialize::deserialize(&mut de)?;
+    Ok(tag.get_identifier())
+}
+
+/// Access [`FixedId`] and [`FixedVersion`] with rkyv.
+pub fn access_tag_rkyv(
+    data: &[u8],
+) -> ::core::result::Result<(FixedId, FixedVersion), ::rkyv::rancor::Error> {
+    let tag = ::rkyv::access::<::rkyv::Archived<self::FixedTypeIdTag>, _>(data)?;
+    Ok(tag.get_identifier())
+}
