@@ -14,8 +14,11 @@ use std::hash::Hash;
 
 /// Prelude used with [`fixed_type_id`]
 pub mod prelude {
+    // used with macros defines
     pub use super::fixed_type_id;
     pub use super::{fstr_to_str, ConstTypeName, FixedId, FixedTypeId, FixedVersion};
+    // standalone functions
+    pub use super::{type_id, type_name, type_version};
 }
 
 pub use fixed_type_id_macros::fixed_type_id;

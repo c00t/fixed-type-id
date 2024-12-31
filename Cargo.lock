@@ -108,7 +108,7 @@ name = "fixed-revision"
 version = "0.1.0"
 dependencies = [
  "fixed-revision-macros",
- "fixed-type-id",
+ "fixed-type-id 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rkyv",
  "ron",
  "serde",
@@ -122,7 +122,7 @@ name = "fixed-revision-macros"
 version = "0.1.0"
 dependencies = [
  "fixed-revision",
- "fixed-type-id",
+ "fixed-type-id 0.2.0",
  "proc-macro2",
  "quote",
  "ron",
@@ -136,7 +136,7 @@ name = "fixed-type-id"
 version = "0.2.0"
 dependencies = [
  "either",
- "fixed-type-id-macros",
+ "fixed-type-id-macros 0.2.0",
  "fixedstr-ext",
  "glam 0.29.2",
  "kollect",
@@ -150,10 +150,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "fixed-type-id"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71bca1d4ad467b140c31c97948c98bf0de410afe654ac4f4f83cde19ad50f78e"
+dependencies = [
+ "either",
+ "fixed-type-id-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fixedstr-ext",
+ "rapidhash",
+ "rkyv",
+ "semver",
+ "serde",
+]
+
+[[package]]
 name = "fixed-type-id-macros"
 version = "0.2.0"
 dependencies = [
- "fixed-type-id",
+ "fixed-type-id 0.2.0",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "rapidhash",
+ "syn",
+]
+
+[[package]]
+name = "fixed-type-id-macros"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2661d5b2e6b6e9d73a44c76745200d9493ae9e5ed1c0a70d55465d1b0cb6a098"
+dependencies = [
  "proc-macro2",
  "quote",
  "rand",

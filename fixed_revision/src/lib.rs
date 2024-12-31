@@ -318,3 +318,8 @@ pub fn access_tag_rkyv(
     let tag = ::rkyv::access::<::rkyv::Archived<self::FixedTypeIdTag>, _>(data)?;
     Ok(tag.get_identifier())
 }
+
+pub mod perlude {
+    pub use super::{FixedTypeIdTag, FixedTypeIdTagged, TypeIdMismatchError, VersionTooNewError};
+    pub use fixed_revision_macros::revisioned;
+}

@@ -137,7 +137,7 @@ fn basic_gen() {
     );
 
     assert_eq!(
-        type_version::<TestEnum>(),
+        TestEnum::max_type_version(),
         Into::<FixedVersion>::into((3, 0, 0))
     );
     assert_eq!(type_id::<TestEnum>(), TestEnum::TYPE_ID);
@@ -147,15 +147,15 @@ fn basic_gen() {
     );
 
     assert_eq!(
-        type_version::<TestUnit>(),
+        TestUnit::max_type_version(),
         Into::<FixedVersion>::into((1, 0, 0))
     );
     assert_eq!(
-        type_version::<TestTuple2>(),
+        TestTuple2::max_type_version(),
         Into::<FixedVersion>::into((2, 0, 0))
     );
     assert_eq!(
-        type_version::<Tester4>(),
+        Tester4::max_type_version(),
         Into::<FixedVersion>::into((4, 0, 0))
     );
 

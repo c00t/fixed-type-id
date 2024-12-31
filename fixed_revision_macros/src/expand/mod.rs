@@ -275,6 +275,18 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
         }
     };
 
+    let enum_alias_impl = {
+        let revision = revision as u64;
+        quote! {
+            impl #name {
+                #[inline(always)]
+                pub fn max_type_version() -> self::FixedVersion {
+                    self::FixedVersion::new(#revision,0,0)
+                }
+            }
+        }
+    };
+
     let enum_alias_serde_impl = if serde_support {
         quote! {
             impl #name {
@@ -293,7 +305,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                     if id != expect_id {
                         return Err(::serde::de::Error::custom(format!("type id mismatch, de:{}, expect:{}", id, expect_id)));
                     }
-                    let current_max_ver = self::type_version::<Self>().major;
+                    let current_max_ver = Self::max_type_version().major;
                     if current_max_ver < de_ver {
                         return Err(::serde::de::Error::custom(format!("version too new, current_max:{}, de_ver:{}", current_max_ver, de_ver)));
                     }
@@ -302,7 +314,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                 }
 
                 /// Serialize this struct into a version tagged struct.
-                /// 
+                ///
                 /// For serde, you can use this method or specific methods provides by the serde lib you choose.
                 /// This method is just provided for API consistency with rkyv or other binary serialize framework.
                 pub fn serialize_serde<F, T, E>(&self, serialize_fn: F) -> ::core::result::Result<T, E>
@@ -332,7 +344,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                             expect_id
                         });
                     }
-                    let current_max_ver = self::type_version::<Self>().major;
+                    let current_max_ver = Self::max_type_version().major;
                     if current_max_ver < deser_ver {
                         ::rkyv::rancor::fail!(self::VersionTooNewError {
                             current_max_ver,
@@ -354,7 +366,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                             expect_id
                         });
                     }
-                    let current_max_ver = self::type_version::<Self>().major;
+                    let current_max_ver = Self::max_type_version().major;
                     if current_max_ver < deser_ver {
                         ::rkyv::rancor::fail!(self::VersionTooNewError {
                             current_max_ver,
@@ -371,7 +383,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                     E: ::rkyv::rancor::Source
                 {
                     ::rkyv::to_bytes::<E>(
-                        &::core::convert::Into::<::fixed_revision::FixedTypeIdTagged<Self>>::into(self.clone()),
+                        &::core::convert::Into::<self::FixedTypeIdTagged<Self>>::into(self.clone()),
                     )
                 }
 
@@ -380,7 +392,7 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
                     E: ::rkyv::rancor::Source
                 {
                     ::rkyv::to_bytes::<E>(
-                        &::core::convert::Into::<::fixed_revision::FixedTypeIdTagged<Self>>::into(self),
+                        &::core::convert::Into::<self::FixedTypeIdTagged<Self>>::into(self),
                     )
                 }
             }
@@ -426,19 +438,21 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
 
             #enum_alias
 
+            #enum_alias_impl
+
             #enum_alias_serde_impl
 
             #enum_alias_rkyv_impl
 
             self::fixed_type_id! {
-                #[version((#revision,0,0))]
+                #[version((0,0,0))]
                 #[omit_version_hash]
                 #fixed_id_name
             }
 
             self::fixed_type_id! {
                 // it's always the current revision
-                #[version((#revision,0,0))]
+                #[version((0,0,0))]
                 #[equal_to(#name)]
                 #[omit_version_hash]
                 #fixed_id_def_name
@@ -449,12 +463,14 @@ pub fn revision(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStrea
 
             #enum_alias
 
+            #enum_alias_impl
+
             #enum_alias_serde_impl
 
             #enum_alias_rkyv_impl
 
             self::fixed_type_id! {
-                #[version((#revision,0,0))]
+                #[version((0,0,0))]
                 #[omit_version_hash]
                 #fixed_id_name
             }
